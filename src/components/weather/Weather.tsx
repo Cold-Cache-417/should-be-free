@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Paywall } from "../paywall/Paywall";
 import {
-  CURRENT_TIERS,
+  CONDITIONS_TIERS,
   DEFAULT_CITIES,
   DETAILS_TIERS,
+  TEMP_TIERS,
   fetchForecast,
   searchCities,
   type CityForecast,
@@ -98,9 +99,10 @@ export function Weather() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CityRef[]>([]);
   const [searching, setSearching] = useState(false);
-  const [currentUnlocked, setCurrentUnlocked] = useState(false);
+  const [tempUnlocked, setTempUnlocked] = useState(false);
+  const [conditionsUnlocked, setConditionsUnlocked] = useState(false);
   const [detailsUnlocked, setDetailsUnlocked] = useState(false);
-  const [paywall, setPaywall] = useState<null | "current" | "details">(null);
+  const [paywall, setPaywall] = useState<null | "temp" | "conditions" | "details">(null);
 
   const load = useCallback(async (c: CityRef) => {
     setLoading(true);
@@ -261,21 +263,36 @@ export function Weather() {
 
             {f && !loading && (
               <>
-                {/* current conditions — blurred until you pay */}
+                {/* current conditions — staged: temperature, then conditions */}
                 <div className="relative mt-5">
-                  {!currentUnlocked && (
+                  {(!tempUnlocked || !conditionsUnlocked) && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-3xl">
                       <span className="grid h-11 w-11 place-items-center rounded-full border border-amber-400/30 bg-amber-400/15 text-amber-300">
                         {LockGlyph}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setPaywall("current")}
-                        className="mt-3 rounded-xl bg-[linear-gradient(180deg,#ffb340,#ff9505)] px-5 py-2.5 text-[13px] font-semibold text-[#2a1800] shadow-[0_4px_20px_-6px_rgba(255,149,5,0.65),inset_0_1px_0_rgba(255,255,255,0.35)] transition-all duration-150 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:scale-[0.97]"
-                      >
-                        See weather — $10
-                      </button>
-                      <p className="mt-2 text-[10.5px] text-zinc-500">the forecast exists. you just can&rsquo;t.</p>
+                      {!tempUnlocked ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setPaywall("temp")}
+                            className="mt-3 rounded-xl bg-[linear-gradient(180deg,#ffb340,#ff9505)] px-5 py-2.5 text-[13px] font-semibold text-[#2a1800] shadow-[0_4px_20px_-6px_rgba(255,149,5,0.65),inset_0_1px_0_rgba(255,255,255,0.35)] transition-all duration-150 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:scale-[0.97]"
+                          >
+                            See the temperature — $5
+                          </button>
+                          <p className="mt-2 text-[10.5px] text-zinc-500">the degrees exist. you just can&rsquo;t.</p>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setPaywall("conditions")}
+                            className="mt-3 rounded-xl bg-[linear-gradient(180deg,#ffb340,#ff9505)] px-5 py-2.5 text-[13px] font-semibold text-[#2a1800] shadow-[0_4px_20px_-6px_rgba(255,149,5,0.65),inset_0_1px_0_rgba(255,255,255,0.35)] transition-all duration-150 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:scale-[0.97]"
+                          >
+                            See the conditions — $10
+                          </button>
+                          <p className="mt-2 text-[10.5px] text-zinc-500">condition, stats and the full picture, behind glass</p>
+                        </>
+                      )}
                     </div>
                   )}
                   <motion.div
@@ -283,25 +300,24 @@ export function Weather() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.35, ease: "easeOut" }}
-                    className={cn("flex flex-col items-center py-6 text-center", !currentUnlocked && "select-none blur-[9px]")}
-                    aria-hidden={!currentUnlocked}
+                    className="flex flex-col items-center py-6 text-center"
                   >
                     <p className="text-[13px] font-medium text-zinc-300">
                       {f.city}, {f.country}
                     </p>
-                    <div className="mt-1 flex items-start">
+                    <div className={cn("mt-1 flex items-start", !tempUnlocked && "select-none blur-[9px]")} aria-hidden={!tempUnlocked}>
                       <span className="font-display text-[84px] font-light leading-none tracking-[-0.03em] text-zinc-50">
                         {f.temp}°
                       </span>
-                      <span className="mt-3 text-[15px] font-medium text-zinc-400">
+                      <span className={cn("mt-3 text-[15px] font-medium text-zinc-400", !conditionsUnlocked && "blur-[9px]")} aria-hidden={!conditionsUnlocked}>
                         H:{f.hi}° L:{f.lo}°
                       </span>
                     </div>
-                    <div className="mt-2 flex items-center gap-2 text-[14px] font-medium text-zinc-300">
+                    <div className={cn("mt-2 flex items-center gap-2 text-[14px] font-medium text-zinc-300", !conditionsUnlocked && "select-none blur-[9px]")} aria-hidden={!conditionsUnlocked}>
                       <ConditionIcon icon={f.condition} className="h-4.5 w-4.5 text-amber-300" />
                       {f.conditionLabel}
                     </div>
-                    <p className="mt-1.5 text-[11.5px] text-zinc-500">
+                    <p className={cn("mt-1.5 text-[11.5px] text-zinc-500", !conditionsUnlocked && "select-none blur-[9px]")} aria-hidden={!conditionsUnlocked}>
                       Feels {f.feels}° · Humidity {f.humidity}% · Wind {f.wind} km/h
                     </p>
                   </motion.div>
@@ -369,23 +385,42 @@ export function Weather() {
       </motion.section>
 
       <AnimatePresence>
-        {paywall === "current" && f && (
+        {paywall === "temp" && f && (
           <Paywall
-            key="wx-current"
-            tiers={CURRENT_TIERS}
-            value={`${f.temp}° · ${f.conditionLabel}`}
-            line="Today's weather"
+            key="wx-temp"
+            tiers={TEMP_TIERS}
+            value={`${f.temp}°`}
+            line="Today's temperature"
             masked="••°"
             brand="Weather Pro"
             receiptBrand="WEATHER PRO"
-            filename="weather_today.bin"
-            headline="Your weather is ready."
-            subline="A real weather service has forecast your city. The conditions are encrypted and awaiting release — a premium feature."
-            checkoutNote="Your forecast is live and waiting. Enter payment details to see today's weather."
+            filename="temperature.bin"
+            headline="The temperature is ready."
+            subline="Your city's degrees are measured and locked. Seeing them is a premium feature."
+            checkoutNote="The degrees are live and waiting. Enter payment details to see today's temperature."
             returnLabel="Back to the forecast"
-            dialogLabel="Unlock today's weather"
+            dialogLabel="Unlock today's temperature"
             onClose={() => setPaywall(null)}
-            onUnlock={() => setCurrentUnlocked(true)}
+            onUnlock={() => setTempUnlocked(true)}
+          />
+        )}
+        {paywall === "conditions" && f && (
+          <Paywall
+            key="wx-conditions"
+            tiers={CONDITIONS_TIERS}
+            value={`${f.conditionLabel} · H${f.hi}° L${f.lo}°`}
+            line="Conditions & stats"
+            masked="••"
+            brand="Weather Pro"
+            receiptBrand="WEATHER PRO"
+            filename="conditions.bin"
+            headline="The conditions are ready."
+            subline="Condition, highs and lows, feels-like, humidity and wind — all measured, all locked. A premium feature."
+            checkoutNote="The stats are computed and waiting. Enter payment details to see today's conditions."
+            returnLabel="Back to the forecast"
+            dialogLabel="Unlock today's conditions"
+            onClose={() => setPaywall(null)}
+            onUnlock={() => setConditionsUnlocked(true)}
           />
         )}
         {paywall === "details" && f && (

@@ -226,6 +226,66 @@ export const CURRENT_TIERS = [
   },
 ];
 
+export const TEMP_TIERS = [
+  {
+    id: "wx-temp",
+    name: "See the Temperature",
+    price: "$5",
+    period: "one-time",
+    description: "Just the degrees. Nothing else.",
+    badge: "Just degrees",
+    featured: true,
+    cta: "See the temperature",
+  },
+  {
+    id: "wx-temp-monthly",
+    name: "Temperature Monthly",
+    price: "$500",
+    period: "/month",
+    description: "All the degrees, all month.",
+    cta: "Temperature monthly",
+  },
+  {
+    id: "wx-temp-yearly",
+    name: "Temperature Yearly",
+    price: "$1,799",
+    period: "/year",
+    description: "A whole year of warmth.",
+    note: "Yes, it's cheaper.",
+    cta: "Temperature yearly",
+  },
+];
+
+export const CONDITIONS_TIERS = [
+  {
+    id: "wx-conditions",
+    name: "Conditions & Stats",
+    price: "$10",
+    period: "one-time",
+    description: "Condition, highs and lows, feels-like, humidity, wind.",
+    badge: "The stats",
+    featured: true,
+    cta: "See the conditions",
+  },
+  {
+    id: "wx-conditions-monthly",
+    name: "Conditions Monthly",
+    price: "$500",
+    period: "/month",
+    description: "All the stats, all month.",
+    cta: "Conditions monthly",
+  },
+  {
+    id: "wx-conditions-yearly",
+    name: "Conditions Yearly",
+    price: "$1,799",
+    period: "/year",
+    description: "A whole year of specifics.",
+    note: "Yes, it's cheaper.",
+    cta: "Conditions yearly",
+  },
+];
+
 export const DETAILS_TIERS = [
   {
     id: "wx-details",

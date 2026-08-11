@@ -226,12 +226,11 @@ export function HackerPrank() {
 
   const share = async () => {
     const url = `${location.origin}${location.pathname}#/hack`;
-    const text = "look what i found about u 😈";
     try {
       if (navigator.share) {
-        await navigator.share({ title: "should-be-free", text, url });
+        await navigator.share({ title: "should-be-free", text: url, url });
       } else {
-        await navigator.clipboard.writeText(`${text} ${url}`);
+        await navigator.clipboard.writeText(url);
         setShared(true);
         timers.current.push(window.setTimeout(() => setShared(false), 2500));
       }
@@ -314,7 +313,7 @@ export function HackerPrank() {
           </div>
 
           {/* terminal — all in one, no inner scroll */}
-          <div className="mt-4 rounded-2xl border border-green-500/[0.12] bg-black/40 p-4 font-mono text-[12px] leading-[1.7]">
+          <div className="mt-5 rounded-2xl border border-green-500/[0.1] bg-black/30 p-5 font-mono text-[12px] leading-[1.75]">
             {!scan ? (
               <p className="text-green-600">
                 <Cursor /> establishing uplink…
@@ -347,7 +346,7 @@ export function HackerPrank() {
                 key="evidence"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 rounded-2xl border border-red-500/[0.18] bg-red-500/[0.04] p-3.5"
+                className="mt-5 rounded-2xl border border-red-500/[0.12] bg-red-500/[0.03] p-4"
               >
                 <p className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-red-400">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" aria-hidden />
@@ -465,7 +464,7 @@ export function HackerPrank() {
                 key="activity"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 rounded-2xl border border-red-500/[0.2] bg-red-500/[0.05] p-3.5"
+                className="mt-5 rounded-2xl border border-red-500/[0.14] bg-red-500/[0.03] p-4"
               >
                 <p className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-red-400">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" aria-hidden />
@@ -493,17 +492,17 @@ export function HackerPrank() {
                 initial={{ opacity: 0, scale: 0.75 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ type: "spring", stiffness: 260, damping: 16 }}
-                className="mt-5 flex flex-col items-center"
+                className="mt-7 flex flex-col items-center"
               >
                 <p
                   className={cn(
-                    "prank-glitch font-mono font-black uppercase tracking-[0.08em] text-red-500",
-                    phase === "reveal" ? "text-[44px]" : "text-[30px]",
+                    "prank-glitch font-display font-semibold uppercase tracking-[0.04em] text-red-500",
+                    phase === "reveal" ? "text-[46px]" : "text-[32px]",
                   )}
                 >
                   I see you.
                 </p>
-                <p className="mt-1.5 font-mono text-[10.5px] uppercase tracking-[0.3em] text-green-600">
+                <p className="mt-2 font-mono text-[10.5px] uppercase tracking-[0.3em] text-green-600">
                   device compromised
                 </p>
               </motion.div>
@@ -518,23 +517,23 @@ export function HackerPrank() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, ease: "easeOut" }}
-                className="mt-5 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4"
+                className="mt-7 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5"
               >
-                <p className="font-display text-center text-[17px] font-semibold text-zinc-100">
+                <p className="font-display text-center text-[19px] font-semibold tracking-[-0.01em] text-zinc-50">
                   And the developer of this website now has all of this.
                 </p>
                 {deleted ? (
                   <>
-                    <p className="mt-2 text-center text-[11.5px] text-zinc-500">
+                    <p className="font-display mt-3 text-center text-[13px] italic text-zinc-400">
                       he never had it. i just made you pay to delete nothing.
                     </p>
-                    <p className="mt-1 text-center text-[11.5px] text-zinc-500">
+                    <p className="font-display mt-1.5 text-center text-[13px] italic text-zinc-400">
                       did the payment go through? it didn&rsquo;t — there are no
                       payments on a prank site. your card never moved.
                     </p>
                   </>
                 ) : (
-                  <p className="mt-2 text-center text-[11.5px] text-zinc-500">
+                  <p className="font-display mt-3 text-center text-[13.5px] italic text-zinc-400">
                     no he doesn&rsquo;t lol. go back to ur life.
                   </p>
                 )}
@@ -557,26 +556,26 @@ export function HackerPrank() {
                   </p>
                 </div>
 
-                {/* share the scare */}
+                {/* share — nonchalant */}
                 <div className="mt-3 border-t border-white/[0.07] pt-3">
                   <button
                     type="button"
                     onClick={share}
-                    className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-green-500/25 bg-green-500/10 font-mono text-[12px] font-semibold uppercase tracking-[0.12em] text-green-300 transition-colors duration-150 hover:bg-green-500/[0.18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/50 active:scale-[0.98]"
+                    className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] text-[13px] font-semibold text-zinc-100 transition-colors duration-150 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 active:scale-[0.98]"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden>
                       <path d="M12 3v13m0-13-4 4m4-4 4 4" />
                       <path d="M5 14.5V19a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4.5" />
                     </svg>
-                    Share the scare — &ldquo;look what i found about u 😈&rdquo;
+                    Prank ur friends
                   </button>
                   {shared && (
                     <motion.p
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="mt-2 text-center font-mono text-[10.5px] text-green-400"
+                      className="mt-2 text-center text-[11px] text-zinc-500"
                     >
-                      link + one-liner copied. send it to someone who deserves it.
+                      link copied.
                     </motion.p>
                   )}
                 </div>
@@ -613,7 +612,7 @@ export function HackerPrank() {
             )}
           </AnimatePresence>
 
-          <p className="mt-5 pb-2 text-center font-mono text-[10.5px] text-zinc-600">
+          <p className="mt-7 pb-2 text-center font-mono text-[10.5px] tracking-wide text-zinc-600">
             a prank site. it tells you what it sees, to your face.
           </p>
         </motion.div>
