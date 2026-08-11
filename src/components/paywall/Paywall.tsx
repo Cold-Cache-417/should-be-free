@@ -14,7 +14,7 @@ import {
 import { cn } from "../../lib/cn";
 
 type TierId = "quick" | "monthly" | "yearly";
-type View = "tiers" | "checkout" | "receipt";
+type View = "tiers" | "checkout" | "downloading" | "receipt";
 
 interface Tier {
   id: TierId;
@@ -134,10 +134,15 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
       window.setTimeout(() => {
         setProcessing(false);
         setReceiptExpression(exprLine);
-        onUnlock();
-        setView("receipt");
+        setView("downloading");
       }, 1900),
     );
+  };
+
+  /* The answer is "downloaded" before it can be revealed. */
+  const finishDownload = () => {
+    onUnlock();
+    setView("receipt");
   };
 
   const onCheckoutSubmit = (e: FormEvent) => {
@@ -238,6 +243,14 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
             onClose={onClose}
             onSubmit={onCheckoutSubmit}
             onEnterPay={onCheckoutKeyDown}
+          />
+        )}
+
+        {view === "downloading" && (
+          <DownloadingView
+            exprLine={receiptExpression}
+            onComplete={finishDownload}
+            onClose={onClose}
           />
         )}
 
@@ -646,6 +659,120 @@ function CheckoutView({
       >
         ← Back to plans
       </button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* downloading — the answer is "transmitted" to the client            */
+/* ------------------------------------------------------------------ */
+
+const DownloadGlyph = (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="h-6 w-6"
+    aria-hidden
+  >
+    <path d="M12 3v10.5m0 0-4-4m4 4 4-4" />
+    <path d="M4.5 17.5v1a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5v-1" />
+  </svg>
+);
+
+function DownloadingView({
+  exprLine,
+  onComplete,
+  onClose,
+}: {
+  exprLine: string;
+  onComplete: () => void;
+  onClose: () => void;
+}) {
+  const [progress, setProgress] = useState(0);
+  const completeRef = useRef(onComplete);
+  const holdTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    completeRef.current = onComplete;
+  }, [onComplete]);
+
+  useEffect(() => {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const duration = reduced ? 500 : 2000;
+    const start = performance.now();
+    let raf = 0;
+
+    const tick = (now: number) => {
+      const p = Math.min(100, ((now - start) / duration) * 100);
+      setProgress(p);
+      if (p >= 100) {
+        holdTimer.current = window.setTimeout(() => completeRef.current(), 500);
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      if (holdTimer.current) window.clearTimeout(holdTimer.current);
+    };
+  }, []);
+
+  const stage =
+    progress < 34 ? "Encrypting" : progress < 70 ? "Transmitting" : progress < 100 ? "Decrypting" : "Unlocking";
+
+  return (
+    <div className="flex flex-col items-center pb-4 pt-2 text-center">
+      {/* header */}
+      <div className="mb-6 flex w-full items-center justify-between">
+        <span className="flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden />
+          Secure vault
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="grid h-10 w-10 place-items-center rounded-full border border-white/[0.08] bg-white/[0.04] text-zinc-400 transition-colors duration-150 hover:bg-white/[0.1] hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:scale-95"
+        >
+          {CloseGlyph}
+        </button>
+      </div>
+
+      <span className="grid h-14 w-14 place-items-center rounded-full border border-amber-400/25 bg-amber-400/10 text-amber-300">
+        {DownloadGlyph}
+      </span>
+
+      <h2 className="mt-4 text-[22px] font-semibold tracking-[-0.02em] text-zinc-50">
+        Downloading your answer
+      </h2>
+
+      <p className="mt-1.5 font-mono text-[11.5px] tabular-nums text-zinc-500">
+        {exprLine ? `${exprLine} =` : "calculation"} · answer_encrypted.bin · 512 B
+      </p>
+
+      {/* progress bar */}
+      <div className="mt-5 w-full max-w-[280px]">
+        <div className="flex items-center justify-between text-[11px] tabular-nums">
+          <span className="font-medium text-zinc-400">{stage}…</span>
+          <span className="text-zinc-500">{Math.round(progress)}%</span>
+        </div>
+        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
+          <div
+            className="h-full rounded-full bg-[linear-gradient(90deg,#ffb340,#ff9505)] transition-[width] duration-75 ease-linear"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      <p className="mt-5 text-[11px] text-zinc-600">
+        AES-256 · TLS 1.3 · fueled entirely by vibes
+      </p>
     </div>
   );
 }
