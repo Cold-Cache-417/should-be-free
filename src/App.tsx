@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { MotionConfig, motion } from "motion/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { Aurora } from "./components/Aurora";
 import { Footer } from "./components/Footer";
 import { Home } from "./components/home/Home";
@@ -9,6 +9,8 @@ import { Stopwatch } from "./components/stopwatch/Stopwatch";
 import { Weather } from "./components/weather/Weather";
 import { WordCounter } from "./components/words/WordCounter";
 import { HackerPrank } from "./components/hack/HackerPrank";
+import { AdminDashboard } from "./components/admin/AdminDashboard";
+import { ANALYTICS_KEY, loadAnalytics, saveAnalytics, withApp, withVisit } from "./lib/analytics";
 import { useHashRoute } from "./lib/useHashRoute";
 
 const LogoMark = (
@@ -80,6 +82,10 @@ function BackLink() {
 
 export default function App() {
   const route = useHashRoute();
+  const [adminOpen, setAdminOpen] = useState(false);
+  const visitedRef = useRef(false);
+  const lastAppRef = useRef<string | null>(null);
+  const adminBuf = useRef("");
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -100,11 +106,56 @@ export default function App() {
                 ? "hack"
                 : "home";
 
+  const store = {
+    get: () => localStorage.getItem(ANALYTICS_KEY),
+    set: (v: string) => localStorage.setItem(ANALYTICS_KEY, v),
+  };
+
+  /* Aggregate analytics — one visit per page load. */
+  useEffect(() => {
+    if (visitedRef.current) return;
+    visitedRef.current = true;
+    saveAnalytics(withVisit(loadAnalytics(store)), store);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* Which app was used, on every route change. */
+  useEffect(() => {
+    if (lastAppRef.current === page) return;
+    lastAppRef.current = page;
+    saveAnalytics(withApp(loadAnalytics(store), page), store);
+  }, [page]);
+
+  /* Type "admin" anywhere to open the dashboard. */
+  useEffect(() => {
+    const target = "admin";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.length !== 1) return;
+      adminBuf.current = (adminBuf.current + e.key.toLowerCase()).slice(-target.length);
+      if (adminBuf.current === target) {
+        adminBuf.current = "";
+        setAdminOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  /* Read fresh counts whenever the dashboard opens. */
+  const analytics = useMemo(() => loadAnalytics(store), [adminOpen]);
+
+  const dashboard = (
+    <AnimatePresence>
+      {adminOpen && <AdminDashboard analytics={analytics} onClose={() => setAdminOpen(false)} />}
+    </AnimatePresence>
+  );
+
   /* The prank takes over the whole screen — no header, no footer. */
   if (page === "hack") {
     return (
       <MotionConfig reducedMotion="user">
         <HackerPrank />
+        {dashboard}
       </MotionConfig>
     );
   }
@@ -154,6 +205,7 @@ export default function App() {
           )}
         </motion.main>
         <Footer />
+        {dashboard}
       </div>
     </MotionConfig>
   );
