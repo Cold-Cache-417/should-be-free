@@ -384,6 +384,82 @@ body {
   color: rgba(255, 214, 140, 0.9);
 }
 
+/* ---------- hacker prank ---------- */
+
+.prank-crt {
+  animation: prank-flicker 4s steps(60) infinite;
+}
+
+.prank-scanlines {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.22) 3px,
+    transparent 4px
+  );
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+}
+
+.prank-cursor {
+  animation: prank-blink 1s steps(2) infinite;
+}
+
+.prank-glitch {
+  animation: prank-glitch 1.6s steps(2, jump-none) infinite;
+}
+
+@keyframes prank-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes prank-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  93% {
+    opacity: 0.86;
+  }
+  94% {
+    opacity: 1;
+  }
+  97% {
+    opacity: 0.94;
+  }
+}
+
+@keyframes prank-glitch {
+  0%,
+  100% {
+    text-shadow: 2px 0 #22c55e, -2px 0 #3b82f6;
+    transform: translate(0, 0);
+  }
+  25% {
+    text-shadow: -3px 0 #22c55e, 3px 0 #3b82f6;
+    transform: translate(1px, -1px);
+  }
+  50% {
+    text-shadow: 2px 0 #3b82f6, -2px 0 #22c55e;
+    transform: translate(-1px, 1px);
+  }
+  75% {
+    text-shadow: -2px 0 #22c55e, 2px 0 #3b82f6;
+    transform: translate(0, -1px);
+  }
+}
+
 /* ---------- reduced motion ---------- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -391,7 +467,10 @@ body {
   .key-in,
   .animate-shake,
   .animate-fade-in,
-  .coin__locked {
+  .coin__locked,
+  .prank-crt,
+  .prank-glitch,
+  .prank-cursor {
     animation: none !important;
   }
 

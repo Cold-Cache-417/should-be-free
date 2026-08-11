@@ -6,6 +6,9 @@ import { Home } from "./components/home/Home";
 import { Calculator } from "./components/calculator/Calculator";
 import { CoinFlip } from "./components/coin/CoinFlip";
 import { Stopwatch } from "./components/stopwatch/Stopwatch";
+import { Weather } from "./components/weather/Weather";
+import { WordCounter } from "./components/words/WordCounter";
+import { HackerPrank } from "./components/hack/HackerPrank";
 import { useHashRoute } from "./lib/useHashRoute";
 
 const LogoMark = (
@@ -89,7 +92,13 @@ export default function App() {
         ? "flip"
         : route === "/stopwatch"
           ? "stopwatch"
-          : "home";
+          : route === "/weather"
+            ? "weather"
+            : route === "/words"
+              ? "words"
+              : route === "/hack"
+                ? "hack"
+                : "home";
 
   return (
     <MotionConfig reducedMotion="user">
@@ -120,6 +129,24 @@ export default function App() {
             <>
               <BackLink />
               <Stopwatch />
+            </>
+          )}
+          {page === "weather" && (
+            <>
+              <BackLink />
+              <Weather />
+            </>
+          )}
+          {page === "words" && (
+            <>
+              <BackLink />
+              <WordCounter />
+            </>
+          )}
+          {page === "hack" && (
+            <>
+              <BackLink />
+              <HackerPrank />
             </>
           )}
         </motion.main>

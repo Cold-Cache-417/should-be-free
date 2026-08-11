@@ -75,9 +75,9 @@ const Apps: AppCardData[] = [
     id: "weather",
     name: "Weather",
     description: "Today's forecast, free. Tomorrow's forecast, premium. The future costs money.",
-    price: "Forecasts from $10",
+    price: "Tomorrow from $10",
     href: "#/weather",
-    available: false,
+    available: true,
     icon: (
       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
         <circle cx="12" cy="8" r="3.5" />
@@ -92,7 +92,7 @@ const Apps: AppCardData[] = [
     description: "Counts your words. All of them. The counting is free, the count is not.",
     price: "Counts from $8",
     href: "#/words",
-    available: false,
+    available: true,
     icon: (
       <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
         <text x="12" y="16" textAnchor="middle" fontSize="11" fontWeight="800" fill="currentColor" fontFamily="inherit">
@@ -100,6 +100,21 @@ const Apps: AppCardData[] = [
         </text>
         <path d="M5 19.5 9.5 5h1L15 19.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
         <path d="M7 14.5h6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    id: "hack",
+    name: "Hacker Prank",
+    description: "Send this link to a friend. It reads their own browser back to them, live. Nothing is stored. Send it anyway.",
+    price: "Scares from $0",
+    href: "#/hack",
+    available: true,
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="m9 7 5 5-5 5" />
+        <path d="M13 5l6 7-6 7" />
+        <path d="M5 4.5l.01.01M7.5 3h.01" />
       </svg>
     ),
   },

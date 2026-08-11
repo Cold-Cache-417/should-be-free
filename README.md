@@ -12,9 +12,11 @@ Every app here does one simple thing and charges you for the outcome.
 | App | What it does | The joke |
 | --- | --- | --- |
 | **Calculator** | A real calculator: precedence, decimals, %, ±, keyboard input. | The answer costs $20. |
-| **Coin Flip** | A fair coin, a gorgeous 3D tumble. | The result costs $5. |
-| Weather | Today's forecast, free. | Tomorrow's forecast is premium. *(coming soon)* |
-| Word Counter | Counts your words. | The count is not free. *(coming soon)* |
+| **Coin Flip** | A fair coin with Epstein/Diddy engravings, riggable. | The result costs $5 — the rig costs $25. |
+| **Stopwatch** | Bills you $10/minute the whole time it runs. | Pausing the meter costs $10. |
+| **Weather** | Today's forecast, free. | Tomorrow's forecast costs $10 (static array). |
+| **Word Counter** | Counts your words as you type. | The count costs $8. |
+| **Hacker Prank** | Reads the visitor's own browser back to them, live. | Nothing is stored — the scare is the prank. |
 
 ## The flow
 
