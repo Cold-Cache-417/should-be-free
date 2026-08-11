@@ -99,7 +99,7 @@ function linesFor(s: PrankScan): string[] {
     `  ▸ screen       ${s.screen} · ${s.colorDepth}`,
     `  ▸ orientation  ${s.orientation}`,
     `  ▸ cpu          ${s.cores} cores`,
-    `  ▸ ram          ${s.memory ?? "classified"}`,
+    `  ▸ ram          ${s.memory ? `${s.memory} · browser estimate` : "classified"}`,
     `  ▸ gpu          ${shortGpu(s.gpu)}`,
     `  ▸ canvas id    ${s.canvas ?? "classified"}`,
     `  ▸ webgl id     ${s.webgl ?? "classified"}`,
@@ -553,6 +553,11 @@ export function HackerPrank() {
                     Your name, email, GPS, camera, clipboard? Those need your
                     permission — or your fingers. Anyone claiming them
                     &ldquo;without asking&rdquo; is lying, or already caught.
+                  </p>
+                  <p className="mt-1.5 text-center text-[12px] leading-relaxed text-zinc-400">
+                    Ram and cores are browser-reported estimates, rounded down
+                    to powers of two — even real sites see the same guesses,
+                    never your exact hardware.
                   </p>
                 </div>
 
