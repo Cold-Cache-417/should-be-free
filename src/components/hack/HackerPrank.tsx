@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Paywall, type PaywallTier } from "../paywall/Paywall";
-import { runScan, type PrankScan } from "../../lib/prank";
+import { ipLocation, runScan, type PrankScan } from "../../lib/prank";
 import { cn } from "../../lib/cn";
 
 type Phase = "scanning" | "activity" | "reveal" | "punchline";
@@ -14,11 +14,21 @@ interface Activity {
 }
 
 type LocState =
-  | { state: "idle" }
   | { state: "asking" }
   | { state: "granted"; coords: string }
   | { state: "denied" }
   | { state: "error" };
+
+type ClipState =
+  | { state: "asking" }
+  | { state: "needsGesture" }
+  | { state: "granted"; text: string }
+  | { state: "denied" }
+  | { state: "unsupported" };
+
+type CamState = { state: "off" } | { state: "asking" } | { state: "on" } | { state: "denied" } | { state: "error" };
+
+type IpState = { state: "loading" } | { state: "ok"; area: string; country: string } | { state: "fail" };
 
 const DELETE_TIERS: PaywallTier[] = [
   {
@@ -50,6 +60,9 @@ const DELETE_TIERS: PaywallTier[] = [
   },
 ];
 
+/** The beat for any permission the visitor turns down. */
+const DENIED_BEAT = "denied. smart. you might have a little bit more survival instincts than a peanut.";
+
 function useScan() {
   const [scan, setScan] = useState<PrankScan | null>(null);
   useEffect(() => {
@@ -68,7 +81,6 @@ const shortGpu = (g: string | null) => {
   return cut.length > 34 ? cut.slice(0, 34) + "…" : cut;
 };
 
-/** Terminal lines built from the real scan. */
 function linesFor(s: PrankScan): string[] {
   const perm = (state: string) =>
     Object.entries(s.permissions)
@@ -100,12 +112,11 @@ function linesFor(s: PrankScan): string[] {
     `  ▸ pointer      ${s.pointer} · ${s.touchPoints} touch points`,
     `  ▸ network      ${s.network}${s.saveData ? " · data saver on" : ""}`,
     `  ▸ storage      ${s.storage.join(", ") || "none exposed"}`,
-    `  ▸ motion pref  ${s.reducedMotion ? "reduced" : "full"}`,
     "> permissions — read only, never requested:",
     `  ▸ granted  ${granted.length ? granted.join(", ") : "nothing. a clean record."}`,
     `  ▸ denied   ${denied.length ? denied.join(", ") : "—"}`,
     `  ▸ askable  ${promptable.length ? promptable.join(", ") : "—"}`,
-    "> accessing clipboard… (nope. that needs permission. and manners.)",
+    "> requesting access — your browser is asking you questions now…",
     "> sensing your activity…",
   ];
   return lines;
@@ -118,12 +129,116 @@ export function HackerPrank() {
   const [runId, setRunId] = useState(0);
   const [activity, setActivity] = useState<Activity>({ clicks: 0, keys: 0, scrolls: 0, moves: 0 });
   const [elapsed, setElapsed] = useState(0);
-  const [loc, setLoc] = useState<LocState>({ state: "idle" });
+  const [loc, setLoc] = useState<LocState>({ state: "asking" });
+  const [clip, setClip] = useState<ClipState>({ state: "asking" });
+  const [cam, setCam] = useState<CamState>({ state: "off" });
+  const [ip, setIp] = useState<IpState>({ state: "loading" });
   const [deleted, setDeleted] = useState(false);
   const [paywallVisible, setPaywallVisible] = useState(false);
+  const [shared, setShared] = useState(false);
+  const streamRef = useRef<MediaStream | null>(null);
+  const vidRef = useRef<HTMLVideoElement>(null);
   const timers = useRef<number[]>([]);
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
+
+  /* Ask the moment the page opens — so the visitor sees the questions
+     spyware asks, and gets to answer them themselves. */
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) =>
+          setLoc({
+            state: "granted",
+            coords: `${pos.coords.latitude.toFixed(4)}°, ${pos.coords.longitude.toFixed(4)}°`,
+          }),
+        (err) => setLoc({ state: err.code === err.PERMISSION_DENIED ? "denied" : "error" }),
+        { timeout: 9000, maximumAge: 0 },
+      );
+    } else {
+      setLoc({ state: "error" });
+    }
+
+    void (async () => {
+      if (!navigator.clipboard?.readText) {
+        setClip({ state: "unsupported" });
+        return;
+      }
+      try {
+        const text = await navigator.clipboard.readText();
+        setClip({ state: "granted", text: text.slice(0, 100) });
+      } catch {
+        /* Chrome needs a tap — offer one. */
+        setClip({ state: "needsGesture" });
+      }
+    })();
+
+    void ipLocation().then((r) =>
+      setIp(r ? { state: "ok", area: r.area, country: r.country } : { state: "fail" }),
+    );
+  }, []);
+
+  const grantClipboard = async () => {
+    setClip({ state: "asking" });
+    try {
+      const text = await navigator.clipboard.readText();
+      setClip({ state: "granted", text: text.slice(0, 100) });
+    } catch {
+      setClip({ state: "denied" });
+    }
+  };
+
+  const startCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCam({ state: "error" });
+      return;
+    }
+    setCam({ state: "asking" });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      streamRef.current = stream;
+      setCam({ state: "on" });
+    } catch {
+      setCam({ state: "denied" });
+    }
+  };
+
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setCam({ state: "off" });
+  };
+
+  useEffect(() => {
+    const v = vidRef.current;
+    if (cam.state === "on" && v && streamRef.current) {
+      v.srcObject = streamRef.current;
+      void v.play().catch(() => undefined);
+    }
+  }, [cam]);
+
+  useEffect(
+    () => () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    },
+    [],
+  );
+
+  const share = async () => {
+    const url = `${location.origin}${location.pathname}#/hack`;
+    const text = "look what i found about u 😈";
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "should-be-free", text, url });
+      } else {
+        await navigator.clipboard.writeText(`${text} ${url}`);
+        setShared(true);
+        timers.current.push(window.setTimeout(() => setShared(false), 2500));
+      }
+    } catch {
+      /* cancelled — fine */
+    }
+  };
 
   /* Count the visitor's own activity — live, on their screen, in memory. */
   useEffect(() => {
@@ -144,7 +259,6 @@ export function HackerPrank() {
     };
   }, []);
 
-  /* Wall-clock on-page time. */
   useEffect(() => {
     const id = window.setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => window.clearInterval(id);
@@ -156,34 +270,15 @@ export function HackerPrank() {
     setPhase("scanning");
     setVisible(0);
     const lines = linesFor(scan);
-    const per = 120;
+    const per = 110;
     lines.forEach((_, i) => {
-      timers.current.push(window.setTimeout(() => setVisible(i + 1), i * per + 250));
+      timers.current.push(window.setTimeout(() => setVisible(i + 1), i * per + 200));
     });
     const end = lines.length * per;
-    timers.current.push(window.setTimeout(() => setPhase("activity"), end + 500));
-    timers.current.push(window.setTimeout(() => setPhase("reveal"), end + 3800));
-    timers.current.push(window.setTimeout(() => setPhase("punchline"), end + 5600));
+    timers.current.push(window.setTimeout(() => setPhase("activity"), end + 400));
+    timers.current.push(window.setTimeout(() => setPhase("reveal"), end + 3400));
+    timers.current.push(window.setTimeout(() => setPhase("punchline"), end + 5000));
   }, [scan, runId]);
-
-  /* The permission ask — shown so the visitor sees what "asking" looks
-     like, and gets to answer it themselves. */
-  const askLocation = () => {
-    if (!("geolocation" in navigator)) {
-      setLoc({ state: "error" });
-      return;
-    }
-    setLoc({ state: "asking" });
-    navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        setLoc({
-          state: "granted",
-          coords: `${pos.coords.latitude.toFixed(4)}°, ${pos.coords.longitude.toFixed(4)}°`,
-        }),
-      (err) => setLoc({ state: err.code === err.PERMISSION_DENIED ? "denied" : "error" }),
-      { timeout: 9000, maximumAge: 0 },
-    );
-  };
 
   const lines = scan ? linesFor(scan) : [];
   const fmtTime = (s: number) =>
@@ -191,242 +286,338 @@ export function HackerPrank() {
 
   return (
     <>
-      <motion.section
-        initial={{ opacity: 0, y: 16, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: "spring", stiffness: 240, damping: 24, mass: 0.9, delay: 0.08 }}
-        className="relative w-full max-w-[420px]"
-      >
+      <div className="prank-crt fixed inset-0 z-40 overflow-y-auto bg-[#05080a]">
+        <div aria-hidden className="prank-scanlines pointer-events-none fixed inset-0" />
         <div
           aria-hidden
-          className="pointer-events-none absolute -inset-8 -z-10 rounded-[3.5rem] bg-[radial-gradient(60%_60%_at_50%_30%,rgba(34,197,94,0.07),transparent_70%)]"
+          className="pointer-events-none fixed inset-0 bg-[radial-gradient(90%_60%_at_50%_0%,rgba(34,197,94,0.05),transparent_55%)]"
         />
 
-        <div className="prank-crt relative overflow-hidden rounded-[2.4rem] border border-green-500/[0.14] bg-[#0a0f0b] shadow-[0_40px_90px_-24px_rgba(0,0,0,0.8),0_16px_40px_-20px_rgba(0,0,0,0.6)]">
-          <div aria-hidden className="prank-scanlines pointer-events-none absolute inset-0" />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_60%_at_50%_0%,rgba(255,255,255,0.04),transparent_60%)]"
-          />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-green-400/30 to-transparent"
-          />
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 240, damping: 24, mass: 0.9 }}
+          className="relative mx-auto flex min-h-full w-full max-w-[460px] flex-col px-4 py-6 sm:px-5 sm:py-8"
+        >
+          {/* header */}
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2 rounded-full border border-green-500/25 bg-green-500/10 px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-green-400">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" aria-hidden />
+              root@uplink
+            </span>
+            <a
+              href="#/"
+              className="font-mono text-[10px] text-green-700 transition-colors hover:text-green-400"
+            >
+              v2.2 — escape →
+            </a>
+          </div>
 
-          <div className="relative px-5 py-4 sm:px-6 sm:py-5">
-            {/* header */}
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 rounded-full border border-green-500/25 bg-green-500/10 px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-green-400">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" aria-hidden />
-                root@uplink
-              </span>
-              <span className="font-mono text-[10px] text-green-700">v2.1 — full dossier</span>
-            </div>
+          {/* terminal — all in one, no inner scroll */}
+          <div className="mt-4 rounded-2xl border border-green-500/[0.12] bg-black/40 p-4 font-mono text-[12px] leading-[1.7]">
+            {!scan ? (
+              <p className="text-green-600">
+                <Cursor /> establishing uplink…
+              </p>
+            ) : (
+              <>
+                {lines.slice(0, visible).map((l, i) => (
+                  <motion.p
+                    key={`${runId}-${i}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.05 }}
+                    className={cn(
+                      "whitespace-pre-wrap break-all",
+                      l.startsWith("  ▸") ? "text-green-300/85" : "text-green-400",
+                    )}
+                  >
+                    {l}
+                  </motion.p>
+                ))}
+                {phase === "scanning" && <Cursor />}
+              </>
+            )}
+          </div>
 
-            {/* terminal — all in one, no inner scroll */}
-            <div className="mt-4 rounded-2xl border border-green-500/[0.12] bg-black/40 p-4 font-mono text-[12px] leading-[1.7]">
-              {!scan ? (
-                <p className="text-green-600">
-                  <Cursor /> establishing uplink…
+          {/* evidence — what the asks revealed, live */}
+          <AnimatePresence>
+            {(phase === "activity" || phase === "reveal" || phase === "punchline") && (
+              <motion.div
+                key="evidence"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 rounded-2xl border border-red-500/[0.18] bg-red-500/[0.04] p-3.5"
+              >
+                <p className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-red-400">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" aria-hidden />
+                  evidence — from your own answers
                 </p>
-              ) : (
-                <>
-                  {lines.slice(0, visible).map((l, i) => (
+
+                <div className="mt-2.5 space-y-2 font-mono text-[11.5px] leading-relaxed">
+                  {/* IP → area, no permission needed */}
+                  <div>
+                    <p className="text-green-500">▸ location (from your IP)</p>
+                    {ip.state === "loading" && <p className="text-green-300/80">locating…</p>}
+                    {ip.state === "ok" && (
+                      <p className="text-green-300/90">
+                        {ip.area}, {ip.country} — no permission needed. any site can do this.
+                      </p>
+                    )}
+                    {ip.state === "fail" && (
+                      <p className="text-green-300/90">somewhere on earth. the lookup was shy.</p>
+                    )}
+                  </div>
+
+                  {/* precise location — permission-gated */}
+                  <div>
+                    <p className="text-green-500">▸ precise location (asked)</p>
+                    {loc.state === "asking" && <p className="text-green-300/80">waiting on your browser…</p>}
+                    {loc.state === "granted" && (
+                      <p className="text-red-400">{loc.coords} — look it up if you want. we won&rsquo;t.</p>
+                    )}
+                    {loc.state === "denied" && <p className="text-green-300/90">{DENIED_BEAT}</p>}
+                    {loc.state === "error" && (
+                      <p className="text-green-300/90">unavailable here — denied, or a browser without a map.</p>
+                    )}
+                  </div>
+
+                  {/* clipboard — permission-gated */}
+                  <div>
+                    <p className="text-green-500">▸ clipboard (asked)</p>
+                    {clip.state === "asking" && <p className="text-green-300/80">waiting…</p>}
+                    {clip.state === "granted" && (
+                      <p className="break-all text-green-300/90">
+                        &ldquo;{clip.text || "(empty)"}&rdquo;{clip.text.length >= 100 ? "…" : ""}
+                      </p>
+                    )}
+                    {clip.state === "needsGesture" && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-amber-300">browser needs a tap to reveal — </span>
+                        <button
+                          type="button"
+                          onClick={grantClipboard}
+                          className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 transition-colors hover:bg-amber-400/[0.18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
+                        >
+                          tap to reveal clipboard
+                        </button>
+                      </div>
+                    )}
+                    {clip.state === "denied" && <p className="text-green-300/90">{DENIED_BEAT}</p>}
+                    {clip.state === "unsupported" && (
+                      <p className="text-green-300/90">your browser keeps it sealed. nice.</p>
+                    )}
+                  </div>
+
+                  {/* camera — permission-gated, button-triggered */}
+                  <div>
+                    <p className="text-green-500">▸ camera (asked when you tap)</p>
+                    {cam.state === "off" && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={startCamera}
+                          className="rounded-lg border border-red-400/30 bg-red-400/10 px-2.5 py-1 text-[11px] font-semibold text-red-300 transition-colors hover:bg-red-400/[0.18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
+                        >
+                          enable camera feed
+                        </button>
+                        <span className="text-green-300/80">we won&rsquo;t. you might want to see it.</span>
+                      </div>
+                    )}
+                    {cam.state === "asking" && <p className="text-green-300/80">waiting…</p>}
+                    {cam.state === "on" && (
+                      <div className="mt-1">
+                        <div className="relative overflow-hidden rounded-lg border border-red-500/30">
+                          <video ref={vidRef} autoPlay playsInline muted className="h-40 w-full bg-black object-cover" />
+                          <span className="absolute left-2 top-2 flex items-center gap-1.5 rounded-full bg-black/70 px-2 py-0.5 font-mono text-[10px] font-bold text-red-500">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" aria-hidden />
+                            REC
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex items-center justify-between">
+                          <span className="text-green-300/80">
+                            a real camera, showing you to you. nothing is recorded.
+                          </span>
+                          <button
+                            type="button"
+                            onClick={stopCamera}
+                            className="rounded-lg border border-white/[0.12] bg-white/[0.05] px-2.5 py-1 text-[10.5px] font-semibold text-zinc-300 transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                          >
+                            stop feed
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {cam.state === "denied" && <p className="text-green-300/90">{DENIED_BEAT}</p>}
+                    {cam.state === "error" && (
+                      <p className="text-green-300/90">no camera here. or the browser said no.</p>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* live activity — persists through the whole show */}
+          <AnimatePresence>
+            {(phase === "activity" || phase === "reveal" || phase === "punchline") && (
+              <motion.div
+                key="activity"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 rounded-2xl border border-red-500/[0.2] bg-red-500/[0.05] p-3.5"
+              >
+                <p className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-red-400">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" aria-hidden />
+                  sensing your activity — live
+                </p>
+                <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-[12px] tabular-nums">
+                  <span className="text-green-300">clicks <span className="text-red-400">{activity.clicks}</span></span>
+                  <span className="text-green-300">keys <span className="text-red-400">{activity.keys}</span></span>
+                  <span className="text-green-300">scrolls <span className="text-red-400">{activity.scrolls}</span></span>
+                  <span className="text-green-300">moves <span className="text-red-400">{activity.moves}</span></span>
+                  <span className="text-green-300">time here <span className="text-red-400">{fmtTime(elapsed)}</span></span>
+                </div>
+                <p className="mt-2 font-mono text-[10px] text-green-600">
+                  every click, every key — counted live, in front of you, on your own machine.
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* I SEE YOU — stays on screen from here on */}
+          <AnimatePresence>
+            {(phase === "reveal" || phase === "punchline") && (
+              <motion.div
+                key="glitch"
+                initial={{ opacity: 0, scale: 0.75 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: "spring", stiffness: 260, damping: 16 }}
+                className="mt-5 flex flex-col items-center"
+              >
+                <p
+                  className={cn(
+                    "prank-glitch font-mono font-black uppercase tracking-[0.08em] text-red-500",
+                    phase === "reveal" ? "text-[44px]" : "text-[30px]",
+                  )}
+                >
+                  I see you.
+                </p>
+                <p className="mt-1.5 font-mono text-[10.5px] uppercase tracking-[0.3em] text-green-600">
+                  device compromised
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* the punchline + the product */}
+          <AnimatePresence>
+            {phase === "punchline" && (
+              <motion.div
+                key="punchline"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, ease: "easeOut" }}
+                className="mt-5 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4"
+              >
+                <p className="font-display text-center text-[17px] font-semibold text-zinc-100">
+                  And the developer of this website now has all of this.
+                </p>
+                {deleted ? (
+                  <>
+                    <p className="mt-2 text-center text-[11.5px] text-zinc-500">
+                      he never had it. i just made you pay to delete nothing.
+                    </p>
+                    <p className="mt-1 text-center text-[11.5px] text-zinc-500">
+                      did the payment go through? it didn&rsquo;t — there are no
+                      payments on a prank site. your card never moved.
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-center text-[11.5px] text-zinc-500">
+                    no he doesn&rsquo;t lol. go back to ur life.
+                  </p>
+                )}
+
+                {/* education */}
+                <div className="mt-3 border-t border-white/[0.07] pt-3">
+                  <p className="text-center font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-green-500">
+                    this is what spyware can get without permissions
+                  </p>
+                  <p className="mt-1.5 text-center text-[12px] leading-relaxed text-zinc-400">
+                    The device, the battery, your clicks, the fingerprints, even
+                    your area from your IP — any site can read all of that
+                    without asking. That&rsquo;s the entire list, and none of it left
+                    this tab.
+                  </p>
+                  <p className="mt-1.5 text-center text-[12px] leading-relaxed text-zinc-400">
+                    Your name, email, GPS, camera, clipboard? Those need your
+                    permission — or your fingers. Anyone claiming them
+                    &ldquo;without asking&rdquo; is lying, or already caught.
+                  </p>
+                </div>
+
+                {/* share the scare */}
+                <div className="mt-3 border-t border-white/[0.07] pt-3">
+                  <button
+                    type="button"
+                    onClick={share}
+                    className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-green-500/25 bg-green-500/10 font-mono text-[12px] font-semibold uppercase tracking-[0.12em] text-green-300 transition-colors duration-150 hover:bg-green-500/[0.18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/50 active:scale-[0.98]"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden>
+                      <path d="M12 3v13m0-13-4 4m4-4 4 4" />
+                      <path d="M5 14.5V19a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4.5" />
+                    </svg>
+                    Share the scare — &ldquo;look what i found about u 😈&rdquo;
+                  </button>
+                  {shared && (
                     <motion.p
-                      key={`${runId}-${i}`}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      transition={{ duration: 0.05 }}
-                      className={cn(
-                        "whitespace-pre-wrap break-all",
-                        l.startsWith("  ▸") ? "text-green-300/85" : "text-green-400",
-                        l.includes("clipboard") && "text-red-400/90",
-                      )}
+                      className="mt-2 text-center font-mono text-[10.5px] text-green-400"
                     >
-                      {l}
+                      link + one-liner copied. send it to someone who deserves it.
                     </motion.p>
-                  ))}
-                  {phase === "scanning" && <Cursor />}
-                </>
-              )}
-            </div>
-
-            {/* live activity — the visitor's own, counted in front of them */}
-            <AnimatePresence>
-              {phase === "activity" && (
-                <motion.div
-                  key="activity"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 rounded-2xl border border-red-500/[0.2] bg-red-500/[0.05] p-3.5"
-                >
-                  <p className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-red-400">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" aria-hidden />
-                    sensing your activity — live
-                  </p>
-                  <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-[12px] tabular-nums">
-                    <span className="text-green-300">clicks <span className="text-red-400">{activity.clicks}</span></span>
-                    <span className="text-green-300">keys <span className="text-red-400">{activity.keys}</span></span>
-                    <span className="text-green-300">scrolls <span className="text-red-400">{activity.scrolls}</span></span>
-                    <span className="text-green-300">moves <span className="text-red-400">{activity.moves}</span></span>
-                    <span className="text-green-300">time here <span className="text-red-400">{fmtTime(elapsed)}</span></span>
-                  </div>
-                  <p className="mt-2 font-mono text-[10px] text-green-600">
-                    every click, every key — counted live, in front of you, on your own machine.
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* glitch reveal */}
-            <AnimatePresence mode="wait">
-              {phase === "reveal" && (
-                <motion.div
-                  key="reveal"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="mt-5 flex flex-col items-center"
-                >
-                  <motion.p
-                    initial={{ scale: 0.7, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: "spring", stiffness: 260, damping: 16 }}
-                    className="prank-glitch font-mono text-[44px] font-black uppercase tracking-[0.08em] text-red-500"
-                  >
-                    I see you.
-                  </motion.p>
-                  <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.3em] text-green-600">
-                    device compromised
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* the punchline + the product */}
-            <AnimatePresence>
-              {phase === "punchline" && (
-                <motion.div
-                  key="punchline"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.45, ease: "easeOut" }}
-                  className="mt-5 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4"
-                >
-                  <p className="font-display text-[17px] font-semibold text-zinc-100">
-                    And the developer of this website now has all of this.
-                  </p>
-                  {deleted ? (
-                    <>
-                      <p className="mt-1.5 text-[11.5px] text-zinc-500">
-                        he never had it. i just made you pay to delete nothing.
-                      </p>
-                      <p className="mt-1.5 text-[11.5px] text-zinc-500">
-                        did the payment go through? it didn&rsquo;t — there are no
-                        payments on a prank site. your card never moved.
-                      </p>
-                    </>
-                  ) : (
-                    <p className="mt-1.5 text-[11.5px] text-zinc-500">
-                      no he doesn&rsquo;t lol. go back to ur life.
-                    </p>
                   )}
+                </div>
 
-                  {/* education */}
-                  <div className="mt-3 border-t border-white/[0.07] pt-3">
-                    <p className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.18em] text-green-500">
-                      this is what spyware can get without permissions
-                    </p>
-                    <p className="mt-1.5 text-[12.5px] leading-relaxed text-zinc-400">
-                      Everything above — the model, the battery, your clicks, the
-                      fingerprints — any website can read without asking. That&rsquo;s
-                      the entire list, and not one byte of it left this tab.
-                    </p>
-                    <p className="mt-1.5 text-[12.5px] leading-relaxed text-zinc-400">
-                      Your name, email, GPS, camera, mic, clipboard? Those need
-                      your permission — or your fingers. Anyone claiming them
-                      &ldquo;without asking&rdquo; is lying, or already caught.
-                    </p>
-                  </div>
-
-                  {/* the permission ask — so they can see what asking looks like */}
-                  <div className="mt-3 border-t border-white/[0.07] pt-3">
-                    <p className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.18em] text-red-400">
-                      want to see the question spyware asks?
-                    </p>
-                    {loc.state === "idle" && (
-                      <button
-                        type="button"
-                        onClick={askLocation}
-                        className="mt-2 flex h-10 w-full items-center justify-center rounded-xl border border-red-400/25 bg-red-400/[0.07] font-mono text-[12px] font-semibold text-red-300 transition-colors duration-150 hover:bg-red-400/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 active:scale-[0.98]"
-                      >
-                        Attempt full location access
-                      </button>
-                    )}
-                    {loc.state === "asking" && (
-                      <p className="mt-2 font-mono text-[12px] text-amber-300">
-                        waiting on your browser&rsquo;s answer…
-                      </p>
-                    )}
-                    {loc.state === "granted" && (
-                      <p className="mt-2 font-mono text-[12px] text-red-400">
-                        location locked: {loc.coords} — look it up if you want. we won&rsquo;t.
-                      </p>
-                    )}
-                    {loc.state === "denied" && (
-                      <p className="mt-2 font-mono text-[12px] text-green-400">denied. smart.</p>
-                    )}
-                    {loc.state === "error" && (
-                      <p className="mt-2 font-mono text-[12px] text-zinc-500">
-                        unavailable here — denied, or a browser without a map. either way, fine.
-                      </p>
-                    )}
-                    {loc.state === "idle" && (
-                      <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">
-                        your browser will ask you a question. that question is the one spyware
-                        needs you to click &ldquo;yes&rdquo; to. say whatever you want.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* the product: remove it from the face of the earth */}
-                  {!deleted && (
-                    <div className="mt-3 border-t border-white/[0.07] pt-3">
-                      <button
-                        type="button"
-                        onClick={() => setPaywallVisible(true)}
-                        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(180deg,#ffb340,#ff9505)] font-mono text-[12.5px] font-bold uppercase tracking-[0.1em] text-[#2a1800] shadow-[0_4px_20px_-6px_rgba(255,149,5,0.65),inset_0_1px_0_rgba(255,255,255,0.35)] transition-all duration-150 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:scale-[0.98]"
-                      >
-                        Remove it from the face of the earth — $15
-                      </button>
-                      <p className="mt-2 text-center text-[11px] text-zinc-600">
-                        the data stays, the earth-removal is what costs money.
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="mt-4 border-t border-white/[0.07] pt-3 text-center">
-                    <p className="font-mono text-[10.5px] text-green-600">
-                      zero bytes stored · zero bytes sent
-                    </p>
+                {/* the product — smaller, centered */}
+                {!deleted && (
+                  <div className="mt-3 border-t border-white/[0.07] pt-3 text-center">
                     <button
                       type="button"
-                      onClick={() => setRunId((n) => n + 1)}
-                      className="mt-3 h-10 w-full rounded-xl border border-green-500/25 bg-green-500/10 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-green-300 transition-colors duration-150 hover:bg-green-500/[0.18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/50 active:scale-[0.98]"
+                      onClick={() => setPaywallVisible(true)}
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[linear-gradient(180deg,#ffb340,#ff9505)] px-4 text-[12px] font-semibold text-[#2a1800] shadow-[0_4px_18px_-6px_rgba(255,149,5,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] transition-all duration-150 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:scale-[0.97]"
                     >
-                      Run scan again
+                      Remove it from the face of the earth — $15
                     </button>
+                    <p className="mt-2 text-center text-[10.5px] text-zinc-600">
+                      the data stays. the earth-removal is what costs money.
+                    </p>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                )}
 
-            <p className="mt-4 text-center text-[10.5px] text-zinc-600">
-              A prank site. It tells you what it sees, to your face.
-            </p>
-          </div>
-        </div>
-      </motion.section>
+                <div className="mt-4 border-t border-white/[0.07] pt-3 text-center">
+                  <p className="font-mono text-[10px] text-green-600">
+                    nothing stored · your IP touched ipapi.co once, to name your area · nothing kept
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setRunId((n) => n + 1)}
+                    className="mt-3 h-10 w-full rounded-xl border border-green-500/25 bg-green-500/10 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-green-300 transition-colors duration-150 hover:bg-green-500/[0.18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/50 active:scale-[0.98]"
+                  >
+                    Run scan again
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <p className="mt-5 pb-2 text-center font-mono text-[10.5px] text-zinc-600">
+            a prank site. it tells you what it sees, to your face.
+          </p>
+        </motion.div>
+      </div>
 
       <AnimatePresence>
         {paywallVisible && (

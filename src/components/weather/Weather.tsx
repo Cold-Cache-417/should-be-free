@@ -1,7 +1,16 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Paywall } from "../paywall/Paywall";
-import { CITIES, CONDITIONS, cityById, TOMORROW_TIERS, type Condition } from "../../lib/weather";
+import {
+  CURRENT_TIERS,
+  DEFAULT_CITIES,
+  DETAILS_TIERS,
+  fetchForecast,
+  searchCities,
+  type CityForecast,
+  type CityRef,
+  type Condition,
+} from "../../lib/weather";
 import { cn } from "../../lib/cn";
 
 const COND_GLOW: Record<Condition, string> = {
@@ -74,12 +83,67 @@ function ConditionIcon({ icon, className }: { icon: Condition; className?: strin
   }
 }
 
+const LockGlyph = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden>
+    <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+    <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+  </svg>
+);
+
 export function Weather() {
-  const [cityId, setCityId] = useState("cupertino");
-  const [unlocked, setUnlocked] = useState(false);
-  const [paywallVisible, setPaywallVisible] = useState(false);
-  const f = cityById(cityId);
-  const tomorrow = f.days[1];
+  const [city, setCity] = useState<CityRef>(DEFAULT_CITIES[0]);
+  const [forecast, setForecast] = useState<CityForecast | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<CityRef[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [currentUnlocked, setCurrentUnlocked] = useState(false);
+  const [detailsUnlocked, setDetailsUnlocked] = useState(false);
+  const [paywall, setPaywall] = useState<null | "current" | "details">(null);
+
+  const load = useCallback(async (c: CityRef) => {
+    setLoading(true);
+    setError(null);
+    try {
+      setForecast(await fetchForecast(c));
+    } catch {
+      setError("the weather service is being as difficult as the pricing.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(city);
+  }, [city, load]);
+
+  /* Debounced geocoding — search the whole world. */
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    setSearching(true);
+    const to = window.setTimeout(async () => {
+      try {
+        setResults(await searchCities(query));
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+    return () => window.clearTimeout(to);
+  }, [query]);
+
+  const pickCity = (c: CityRef) => {
+    setCity(c);
+    setQuery("");
+    setResults([]);
+  };
+
+  const f = forecast;
 
   return (
     <>
@@ -99,12 +163,10 @@ export function Weather() {
             aria-hidden
             className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent"
           />
-
-          {/* condition glow — shifts with the forecast */}
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0"
-            style={{ background: COND_GLOW[f.condition] }}
+            style={{ background: f ? COND_GLOW[f.condition] : "none" }}
           />
 
           <div className="relative px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
@@ -115,173 +177,234 @@ export function Weather() {
                 Weather
               </span>
               <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                Today free · Tomorrow $10
+                °C · real data
               </span>
             </div>
 
-            {/* city picker */}
-            <div className="mt-4 flex gap-1.5 overflow-x-auto pb-0.5">
-              {CITIES.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCityId(c.id)}
-                  className={cn(
-                    "shrink-0 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60",
-                    c.id === cityId
-                      ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
-                      : "border-white/[0.08] bg-white/[0.04] text-zinc-400 hover:text-zinc-200",
-                  )}
-                >
-                  {c.city}
-                </button>
-              ))}
-            </div>
-
-            {/* current conditions */}
-            <motion.div
-              key={f.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, ease: "easeOut" }}
-              className="mt-5 flex flex-col items-center text-center"
-            >
-              <p className="text-[13px] font-medium text-zinc-300">
-                {f.city}, {f.country}
-              </p>
-              <div className="mt-1 flex items-start">
-                <span className="font-display text-[84px] font-light leading-none tracking-[-0.03em] text-zinc-50">
-                  {f.temp}°
-                </span>
-                <span className="mt-3 text-[15px] font-medium text-zinc-400">
-                  H:{f.hi}° L:{f.lo}°
-                </span>
-              </div>
-              <div className="mt-2 flex items-center gap-2 text-[14px] font-medium text-zinc-300">
-                <ConditionIcon icon={f.condition} className="h-4.5 w-4.5 text-amber-300" />
-                {f.conditionLabel}
-              </div>
-              <p className="mt-1.5 text-[11.5px] text-zinc-500">
-                Humidity {f.humidity}% · Wind {f.wind} mph
-              </p>
-            </motion.div>
-
-            {/* hourly strip — today, free */}
-            <div className="mt-5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                Hourly · today
-              </p>
-              <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-                {f.hourly.map((h) => (
-                  <div
-                    key={h.t}
-                    className="flex w-[52px] shrink-0 flex-col items-center gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.03] px-1 py-2.5"
-                  >
-                    <span className="text-[10px] font-medium text-zinc-500">{h.t}</span>
-                    <ConditionIcon icon={h.icon} className="h-4 w-4 text-amber-300" />
-                    <span className="text-[12.5px] font-semibold tabular-nums text-zinc-100">
-                      {h.temp}°
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* daily list — tomorrow is the product */}
-            <div className="mt-5">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                  7-day forecast
-                </p>
-                <span className="text-[10px] text-zinc-600">courtesy of a static array</span>
-              </div>
-              <div className="mt-2 overflow-hidden rounded-2xl border border-white/[0.07] bg-black/20">
-                {f.days.map((d, i) =>
-                  unlocked || i < 1 ? (
-                    <div
-                      key={d.day}
-                      className="flex items-center gap-3 border-b border-white/[0.05] px-3.5 py-2.5 last:border-b-0"
-                    >
-                      <span className="w-[72px] text-[12.5px] font-medium text-zinc-200">{d.day}</span>
-                      <ConditionIcon icon={d.icon} className="h-4 w-4 text-amber-300" />
-                      <div className="flex flex-1 items-center gap-2">
-                        <span className="w-7 text-right text-[11.5px] tabular-nums text-zinc-500">{d.lo}°</span>
-                        <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/[0.07]">
-                          <div
-                            className="absolute inset-y-0 left-[15%] rounded-full bg-[linear-gradient(90deg,#ffb340,#ff9505)]"
-                            style={{
-                              width: `${Math.min(100, 22 + (d.hi - d.lo) * 4)}%`,
-                            }}
-                          />
-                        </div>
-                        <span className="w-7 text-[11.5px] font-semibold tabular-nums text-zinc-100">{d.hi}°</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div key={d.day} className="flex items-center gap-3 border-b border-white/[0.05] px-3.5 py-2.5 last:border-b-0">
-                      <span className="w-[72px] text-[12.5px] font-medium text-zinc-300">{d.day}</span>
-                      <span className="h-4 w-4 rounded-full border border-amber-400/30 bg-amber-400/10" aria-hidden />
-                      <div className="flex flex-1 items-center gap-2">
-                        <span className="w-7 text-right text-[11.5px] tabular-nums text-zinc-600">••</span>
-                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.07]">
-                          <div className="h-full w-[34%] rounded-full bg-white/[0.09]" />
-                        </div>
-                        <span className="w-7 text-[11.5px] tabular-nums text-zinc-600">••</span>
-                      </div>
-                    </div>
-                  ),
+            {/* search the world */}
+            <div className="relative mt-4">
+              <div className="flex items-center gap-2 rounded-xl border border-white/[0.09] bg-black/25 px-3 focus-within:border-amber-400/40 focus-within:ring-2 focus-within:ring-amber-400/20">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden>
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.2-3.2" />
+                </svg>
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search any city on Earth…"
+                  aria-label="Search for a city"
+                  className="h-10 w-full bg-transparent text-[13px] text-zinc-100 placeholder:text-zinc-600 outline-none"
+                />
+                {searching && (
+                  <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-amber-400/30 border-t-amber-400" aria-hidden />
                 )}
               </div>
-
-              {!unlocked && (
+              {results.length > 0 && (
                 <motion.div
-                  initial={{ opacity: 0, y: 6 }}
+                  initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.15, duration: 0.35 }}
-                  className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-amber-400/25 bg-[linear-gradient(180deg,rgba(255,159,10,0.12),rgba(255,159,10,0.04))] px-4 py-3"
+                  className="absolute inset-x-0 top-full z-10 mt-1.5 overflow-hidden rounded-xl border border-white/[0.1] bg-[#16161d] shadow-[0_24px_50px_-16px_rgba(0,0,0,0.8)]"
                 >
-                  <div>
-                    <p className="text-[12.5px] font-semibold text-zinc-100">Tomorrow is a premium feature.</p>
-                    <p className="text-[11px] text-zinc-500">
-                      The future costs money. Today is free.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setPaywallVisible(true)}
-                    className="shrink-0 rounded-xl bg-[linear-gradient(180deg,#ffb340,#ff9505)] px-4 py-2.5 text-[12.5px] font-semibold text-[#2a1800] transition-all duration-150 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:scale-[0.97]"
-                  >
-                    Unlock — $10
-                  </button>
+                  {results.map((r) => (
+                    <button
+                      key={`${r.name}-${r.country}-${r.lat}-${r.lon}`}
+                      type="button"
+                      onClick={() => pickCity(r)}
+                      className="flex w-full items-center justify-between px-3.5 py-2.5 text-left transition-colors hover:bg-white/[0.06] focus-visible:outline-none focus-visible:bg-white/[0.06]"
+                    >
+                      <span className="text-[13px] font-medium text-zinc-100">{r.name}</span>
+                      <span className="text-[11px] text-zinc-500">{r.country}</span>
+                    </button>
+                  ))}
                 </motion.div>
               )}
             </div>
 
+            {/* quick picks */}
+            <div className="mt-2.5 flex gap-1.5 overflow-x-auto pb-0.5">
+              {DEFAULT_CITIES.map((c) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  onClick={() => pickCity(c)}
+                  className={cn(
+                    "shrink-0 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60",
+                    c.name === city.name
+                      ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
+                      : "border-white/[0.08] bg-white/[0.04] text-zinc-400 hover:text-zinc-200",
+                  )}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+
+            {loading && (
+              <div className="mt-8 flex flex-col items-center py-8 text-center">
+                <span className="h-6 w-6 animate-spin rounded-full border-2 border-amber-400/25 border-t-amber-400" aria-hidden />
+                <p className="mt-3 text-[12.5px] text-zinc-500">Consulting a real weather service…</p>
+              </div>
+            )}
+
+            {error && !loading && (
+              <div className="mt-8 flex flex-col items-center py-6 text-center">
+                <p className="text-[13px] text-zinc-400">{error}</p>
+                <button
+                  type="button"
+                  onClick={() => void load(city)}
+                  className="mt-3 rounded-xl border border-white/[0.1] bg-white/[0.05] px-4 py-2 text-[12px] font-semibold text-zinc-200 transition-colors hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {f && !loading && (
+              <>
+                {/* current conditions — blurred until you pay */}
+                <div className="relative mt-5">
+                  {!currentUnlocked && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-3xl">
+                      <span className="grid h-11 w-11 place-items-center rounded-full border border-amber-400/30 bg-amber-400/15 text-amber-300">
+                        {LockGlyph}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPaywall("current")}
+                        className="mt-3 rounded-xl bg-[linear-gradient(180deg,#ffb340,#ff9505)] px-5 py-2.5 text-[13px] font-semibold text-[#2a1800] shadow-[0_4px_20px_-6px_rgba(255,149,5,0.65),inset_0_1px_0_rgba(255,255,255,0.35)] transition-all duration-150 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:scale-[0.97]"
+                      >
+                        See weather — $10
+                      </button>
+                      <p className="mt-2 text-[10.5px] text-zinc-500">the forecast exists. you just can&rsquo;t.</p>
+                    </div>
+                  )}
+                  <motion.div
+                    key={f.city}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35, ease: "easeOut" }}
+                    className={cn("flex flex-col items-center py-6 text-center", !currentUnlocked && "select-none blur-[9px]")}
+                    aria-hidden={!currentUnlocked}
+                  >
+                    <p className="text-[13px] font-medium text-zinc-300">
+                      {f.city}, {f.country}
+                    </p>
+                    <div className="mt-1 flex items-start">
+                      <span className="font-display text-[84px] font-light leading-none tracking-[-0.03em] text-zinc-50">
+                        {f.temp}°
+                      </span>
+                      <span className="mt-3 text-[15px] font-medium text-zinc-400">
+                        H:{f.hi}° L:{f.lo}°
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 text-[14px] font-medium text-zinc-300">
+                      <ConditionIcon icon={f.condition} className="h-4.5 w-4.5 text-amber-300" />
+                      {f.conditionLabel}
+                    </div>
+                    <p className="mt-1.5 text-[11.5px] text-zinc-500">
+                      Feels {f.feels}° · Humidity {f.humidity}% · Wind {f.wind} km/h
+                    </p>
+                  </motion.div>
+                </div>
+
+                {/* details — hourly + 7-day, blurred until you pay more */}
+                <div className="relative mt-2">
+                  {!detailsUnlocked && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl">
+                      <button
+                        type="button"
+                        onClick={() => setPaywall("details")}
+                        className="rounded-xl bg-[linear-gradient(180deg,#ffb340,#ff9505)] px-5 py-2.5 text-[13px] font-semibold text-[#2a1800] shadow-[0_4px_20px_-6px_rgba(255,149,5,0.65),inset_0_1px_0_rgba(255,255,255,0.35)] transition-all duration-150 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:scale-[0.97]"
+                      >
+                        Pay for details — $15
+                      </button>
+                      <p className="mt-2 text-[10.5px] text-zinc-500">hourly strip + the whole week, behind glass</p>
+                    </div>
+                  )}
+                  <div className={cn(!detailsUnlocked && "select-none blur-[9px]")} aria-hidden={!detailsUnlocked}>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                      Hourly · {f.city}
+                    </p>
+                    <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                      {f.hourly.map((h) => (
+                        <div key={h.t} className="flex w-[52px] shrink-0 flex-col items-center gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.03] px-1 py-2.5">
+                          <span className="text-[10px] font-medium text-zinc-500">{h.t}</span>
+                          <ConditionIcon icon={h.icon} className="h-4 w-4 text-amber-300" />
+                          <span className="text-[12.5px] font-semibold tabular-nums text-zinc-100">{h.temp}°</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                      7-day outlook
+                    </p>
+                    <div className="mt-2 overflow-hidden rounded-2xl border border-white/[0.07] bg-black/20">
+                      {f.days.map((d) => (
+                        <div key={d.day} className="flex items-center gap-3 border-b border-white/[0.05] px-3.5 py-2.5 last:border-b-0">
+                          <span className="w-[72px] text-[12.5px] font-medium text-zinc-200">{d.day}</span>
+                          <ConditionIcon icon={d.icon} className="h-4 w-4 text-amber-300" />
+                          <div className="flex flex-1 items-center gap-2">
+                            <span className="w-8 text-right text-[11.5px] tabular-nums text-zinc-500">{d.lo}°</span>
+                            <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/[0.07]">
+                              <div
+                                className="absolute inset-y-0 left-[15%] rounded-full bg-[linear-gradient(90deg,#ffb340,#ff9505)]"
+                                style={{ width: `${Math.min(100, 22 + (d.hi - d.lo) * 4)}%` }}
+                              />
+                            </div>
+                            <span className="w-8 text-[11.5px] font-semibold tabular-nums text-zinc-100">{d.hi}°</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
             <p className="mt-4 text-center text-[10.5px] text-zinc-600">
-              Forecast generated by a static array. Meteorology sold separately.
+              Real data from Open-Meteo, in °C like the rest of the planet. The weather is real. The pricing is not.
             </p>
           </div>
         </div>
       </motion.section>
 
       <AnimatePresence>
-        {paywallVisible && (
+        {paywall === "current" && f && (
           <Paywall
-            key="wx-paywall"
-            tiers={TOMORROW_TIERS}
-            value={`${tomorrow.hi}° · ${CONDITIONS[tomorrow.icon]}`}
-            line="Tomorrow's forecast"
+            key="wx-current"
+            tiers={CURRENT_TIERS}
+            value={`${f.temp}° · ${f.conditionLabel}`}
+            line="Today's weather"
             masked="••°"
             brand="Weather Pro"
             receiptBrand="WEATHER PRO"
-            filename="tomorrow.bin"
-            headline="Tomorrow is ready."
-            subline="Our meteorologists (a static array) have finished forecasting the future. It's encrypted and awaiting release — a premium feature."
-            checkoutNote="Your tomorrow is forecast and waiting. Enter payment details to release it."
+            filename="weather_today.bin"
+            headline="Your weather is ready."
+            subline="A real weather service has forecast your city. The conditions are encrypted and awaiting release — a premium feature."
+            checkoutNote="Your forecast is live and waiting. Enter payment details to see today's weather."
             returnLabel="Back to the forecast"
-            dialogLabel="Unlock tomorrow's forecast"
-            onClose={() => setPaywallVisible(false)}
-            onUnlock={() => setUnlocked(true)}
+            dialogLabel="Unlock today's weather"
+            onClose={() => setPaywall(null)}
+            onUnlock={() => setCurrentUnlocked(true)}
+          />
+        )}
+        {paywall === "details" && f && (
+          <Paywall
+            key="wx-details"
+            tiers={DETAILS_TIERS}
+            value={`${f.hi}° · full week`}
+            line="Forecast details"
+            masked="••••"
+            brand="Weather Pro"
+            receiptBrand="WEATHER PRO"
+            filename="forecast_details.bin"
+            headline="The details are ready."
+            subline="The hourly strip and the full seven-day outlook are compiled. They're locked behind the details paywall — a premium feature."
+            checkoutNote="The specifics are computed and waiting. Enter payment details to see the details."
+            returnLabel="Back to the forecast"
+            dialogLabel="Unlock forecast details"
+            onClose={() => setPaywall(null)}
+            onUnlock={() => setDetailsUnlocked(true)}
           />
         )}
       </AnimatePresence>

@@ -100,6 +100,15 @@ export default function App() {
                 ? "hack"
                 : "home";
 
+  /* The prank takes over the whole screen — no header, no footer. */
+  if (page === "hack") {
+    return (
+      <MotionConfig reducedMotion="user">
+        <HackerPrank />
+      </MotionConfig>
+    );
+  }
+
   return (
     <MotionConfig reducedMotion="user">
       <div className="relative flex min-h-dvh flex-col items-center justify-center px-4 py-8 sm:py-12">
@@ -141,12 +150,6 @@ export default function App() {
             <>
               <BackLink />
               <WordCounter />
-            </>
-          )}
-          {page === "hack" && (
-            <>
-              <BackLink />
-              <HackerPrank />
             </>
           )}
         </motion.main>

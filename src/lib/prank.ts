@@ -316,3 +316,32 @@ function hash(input: string): string {
   for (let i = 0; i < input.length; i++) h = ((h << 5) + h + input.charCodeAt(i)) >>> 0;
   return h.toString(16).padStart(8, "0");
 }
+
+export interface IPLocation {
+  area: string;
+  country: string;
+}
+
+/**
+ * Area + country from the visitor's own IP, via a public geolocation
+ * service. No permission needed — that's the educational point. The
+ * visitor's IP already reaches any server that hosts a site; this just
+ * names what that means. Nothing is stored.
+ */
+export async function ipLocation(): Promise<IPLocation | null> {
+  try {
+    const ctrl = new AbortController();
+    const to = window.setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch("https://ipapi.co/json/", { signal: ctrl.signal });
+    window.clearTimeout(to);
+    if (!res.ok) return null;
+    const j = (await res.json()) as { city?: string; country_name?: string; country_code?: string };
+    if (!j || typeof j.city !== "string") return null;
+    return {
+      area: j.city,
+      country: typeof j.country_name === "string" ? j.country_name : (j.country_code ?? "?"),
+    };
+  } catch {
+    return null;
+  }
+}
