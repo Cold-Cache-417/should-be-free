@@ -3,7 +3,14 @@ import { AnimatePresence, motion } from "motion/react";
 import { runScan, type PrankScan } from "../../lib/prank";
 import { cn } from "../../lib/cn";
 
-type Phase = "scanning" | "reveal" | "punchline";
+type Phase = "scanning" | "activity" | "reveal" | "punchline";
+
+interface Activity {
+  clicks: number;
+  keys: number;
+  scrolls: number;
+  moves: number;
+}
 
 function useScan() {
   const [scan, setScan] = useState<PrankScan | null>(null);
@@ -17,29 +24,53 @@ function useScan() {
   return scan;
 }
 
-/** Build the terminal lines once the scan is in. */
+const shortGpu = (g: string | null) => {
+  if (!g) return "classified";
+  const cut = g.split("(")[0]?.trim();
+  return cut.length > 34 ? cut.slice(0, 34) + "…" : cut;
+};
+
+/** Terminal lines built from the real scan. */
 function linesFor(s: PrankScan): string[] {
-  const gpu = s.gpu?.split("(")[0]?.trim() ?? "classified";
-  return [
+  const perm = (state: string) =>
+    Object.entries(s.permissions)
+      .filter(([, v]) => v === state)
+      .map(([k]) => k);
+  const granted = perm("granted");
+  const denied = perm("denied");
+  const promptable = perm("prompt");
+  const lines: string[] = [
     "> establishing uplink…",
-    "> uplink secured. reading device…",
-    `  ▸ browser      ${s.browser}`,
-    `  ▸ os           ${s.os}`,
+    "> uplink secured. device identified:",
+    `  ▸ model        ${s.model}`,
     `  ▸ device       ${s.device}`,
-    `  ▸ screen       ${s.screen}`,
+    `  ▸ os           ${s.os}`,
+    `  ▸ browser      ${s.browser}`,
+    `  ▸ screen       ${s.screen} · ${s.colorDepth}`,
+    `  ▸ orientation  ${s.orientation}`,
     `  ▸ cpu          ${s.cores} cores`,
     `  ▸ ram          ${s.memory ?? "classified"}`,
-    `  ▸ gpu          ${gpu}`,
+    `  ▸ gpu          ${shortGpu(s.gpu)}`,
+    `  ▸ canvas id    ${s.canvas ?? "classified"}`,
+    `  ▸ webgl id     ${s.webgl ?? "classified"}`,
+    `  ▸ audio id     ${s.audio ?? "classified"}`,
+    `  ▸ fonts        ${s.fonts.slice(0, 5).join(", ") || "classified"}`,
     `  ▸ battery      ${s.battery ?? "classified"}`,
     `  ▸ language     ${s.language}`,
-    `  ▸ timezone     ${s.timezone}`,
-    `  ▸ canvas id    ${s.canvas ?? "classified"}`,
-    `  ▸ fonts        ${s.fonts.slice(0, 4).join(", ") || "classified"}`,
-    "> accessing clipboard… (nope. that would be rude.)",
-    "> tracking cursor… done.",
-    "> compiling dossier… done.",
-    "> transmitting to @lxqmxn_24…",
+    `  ▸ locales      ${s.languages}`,
+    `  ▸ timezone     ${s.timezone} (UTC${s.tzOffset})`,
+    `  ▸ pointer      ${s.pointer} · ${s.touchPoints} touch points`,
+    `  ▸ network      ${s.network}${s.saveData ? " · data saver on" : ""}`,
+    `  ▸ storage      ${s.storage.join(", ") || "none exposed"}`,
+    `  ▸ motion pref  ${s.reducedMotion ? "reduced" : "full"}`,
+    "> permissions — read only, never requested:",
+    `  ▸ granted  ${granted.length ? granted.join(", ") : "nothing. a clean record."}`,
+    `  ▸ denied   ${denied.length ? denied.join(", ") : "—"}`,
+    `  ▸ askable  ${promptable.length ? promptable.join(", ") : "—"}`,
+    "> accessing clipboard… (nope. that needs permission. and manners.)",
+    "> sensing your activity…",
   ];
+  return lines;
 }
 
 export function HackerPrank() {
@@ -47,29 +78,63 @@ export function HackerPrank() {
   const [phase, setPhase] = useState<Phase>("scanning");
   const [visible, setVisible] = useState(0);
   const [runId, setRunId] = useState(0);
+  const [activity, setActivity] = useState<Activity>({ clicks: 0, keys: 0, scrolls: 0, moves: 0 });
+  const [elapsed, setElapsed] = useState(0);
+  const termRef = useRef<HTMLDivElement>(null);
   const timers = useRef<number[]>([]);
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  /* Drive the staged scan → reveal → punchline. */
+  /* Count the visitor's own activity — live, on their screen, in memory. */
+  useEffect(() => {
+    const bump = (k: keyof Activity) => () => setActivity((a) => ({ ...a, [k]: a[k] + 1 }));
+    const click = bump("clicks");
+    const key = bump("keys");
+    const scroll = bump("scrolls");
+    const move = bump("moves");
+    window.addEventListener("pointerdown", click);
+    window.addEventListener("keydown", key);
+    window.addEventListener("scroll", scroll, true);
+    window.addEventListener("pointermove", move);
+    return () => {
+      window.removeEventListener("pointerdown", click);
+      window.removeEventListener("keydown", key);
+      window.removeEventListener("scroll", scroll, true);
+      window.removeEventListener("pointermove", move);
+    };
+  }, []);
+
+  /* Wall-clock on-page time. */
+  useEffect(() => {
+    const id = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  /* Drive the staged scan → activity → reveal → punchline. */
   useEffect(() => {
     if (!scan) return;
     setPhase("scanning");
     setVisible(0);
     const lines = linesFor(scan);
-    const per = 170;
+    const per = 120;
     lines.forEach((_, i) => {
-      timers.current.push(window.setTimeout(() => setVisible(i + 1), i * per + 300));
+      timers.current.push(window.setTimeout(() => setVisible(i + 1), i * per + 250));
     });
-    timers.current.push(
-      window.setTimeout(() => setPhase("reveal"), lines.length * per + 800),
-    );
-    timers.current.push(
-      window.setTimeout(() => setPhase("punchline"), lines.length * per + 2600),
-    );
+    const end = lines.length * per;
+    timers.current.push(window.setTimeout(() => setPhase("activity"), end + 500));
+    timers.current.push(window.setTimeout(() => setPhase("reveal"), end + 3800));
+    timers.current.push(window.setTimeout(() => setPhase("punchline"), end + 5600));
   }, [scan, runId]);
 
+  /* Keep the terminal scrolled to the bottom as lines land. */
+  useEffect(() => {
+    const el = termRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [visible, phase]);
+
   const lines = scan ? linesFor(scan) : [];
+  const fmtTime = (s: number) =>
+    `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   return (
     <motion.section
@@ -84,7 +149,6 @@ export function HackerPrank() {
       />
 
       <div className="prank-crt relative overflow-hidden rounded-[2.4rem] border border-green-500/[0.14] bg-[#0a0f0b] shadow-[0_40px_90px_-24px_rgba(0,0,0,0.8),0_16px_40px_-20px_rgba(0,0,0,0.6)]">
-        {/* CRT scanlines + vignette */}
         <div aria-hidden className="prank-scanlines pointer-events-none absolute inset-0" />
         <div
           aria-hidden
@@ -102,11 +166,14 @@ export function HackerPrank() {
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" aria-hidden />
               root@uplink
             </span>
-            <span className="font-mono text-[10px] text-green-700">v1.3.7</span>
+            <span className="font-mono text-[10px] text-green-700">v2.0 — full dossier</span>
           </div>
 
           {/* terminal */}
-          <div className="mt-4 rounded-2xl border border-green-500/[0.12] bg-black/40 p-4 font-mono text-[12px] leading-[1.7]">
+          <div
+            ref={termRef}
+            className="mt-4 max-h-[300px] overflow-y-auto rounded-2xl border border-green-500/[0.12] bg-black/40 p-4 font-mono text-[12px] leading-[1.7] scrollbar-thin"
+          >
             {!scan ? (
               <p className="text-green-600">
                 <Cursor /> establishing uplink…
@@ -118,10 +185,11 @@ export function HackerPrank() {
                     key={`${runId}-${i}`}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ duration: 0.06 }}
+                    transition={{ duration: 0.05 }}
                     className={cn(
-                      "whitespace-pre-wrap",
+                      "whitespace-pre-wrap break-all",
                       l.startsWith("  ▸") ? "text-green-300/85" : "text-green-400",
+                      l.includes("clipboard") && "text-red-400/90",
                     )}
                   >
                     {l}
@@ -131,6 +199,33 @@ export function HackerPrank() {
               </>
             )}
           </div>
+
+          {/* live activity — the visitor's own, counted in front of them */}
+          <AnimatePresence>
+            {phase === "activity" && (
+              <motion.div
+                key="activity"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 rounded-2xl border border-red-500/[0.2] bg-red-500/[0.05] p-3.5"
+              >
+                <p className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-red-400">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" aria-hidden />
+                  sensing your activity — live
+                </p>
+                <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-[12px] tabular-nums">
+                  <span className="text-green-300">clicks <span className="text-red-400">{activity.clicks}</span></span>
+                  <span className="text-green-300">keys <span className="text-red-400">{activity.keys}</span></span>
+                  <span className="text-green-300">scrolls <span className="text-red-400">{activity.scrolls}</span></span>
+                  <span className="text-green-300">moves <span className="text-red-400">{activity.moves}</span></span>
+                  <span className="text-green-300">time here <span className="text-red-400">{fmtTime(elapsed)}</span></span>
+                </div>
+                <p className="mt-2 font-mono text-[10px] text-green-600">
+                  every click, every key — counted live, in front of you, on your own machine.
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* glitch reveal */}
           <AnimatePresence mode="wait">
@@ -168,14 +263,28 @@ export function HackerPrank() {
                 className="mt-5 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4"
               >
                 <p className="font-display text-[17px] font-semibold text-zinc-100">
-                  And @lxqmxn_24 now has all of this.
+                  And the developer of this website — @lxqmxn_24 — now has all of this.
                 </p>
-                <p className="mt-2 text-[13px] leading-relaxed text-zinc-400">
-                  …he doesn&rsquo;t. Nothing left this tab. That was your own
-                  browser, reading itself, in front of you. No data, no
-                  storage, no server. A prank, and a well-executed one.
-                  Go back to your life.
+                <p className="mt-1.5 text-[11.5px] text-zinc-500">
+                  no he doesn&rsquo;t lol. go back to ur life.
                 </p>
+
+                <div className="mt-3 border-t border-white/[0.07] pt-3">
+                  <p className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.18em] text-green-500">
+                    this is what spyware can get without permissions
+                  </p>
+                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-zinc-400">
+                    Everything above — the model, the battery, your clicks, the
+                    fingerprints — any website can read without asking. That&rsquo;s
+                    the entire list, and not one byte of it left this tab.
+                  </p>
+                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-zinc-400">
+                    Your name, email, GPS, camera, mic, clipboard? Those need
+                    your permission — or your fingers. Anyone claiming them
+                    &ldquo;without asking&rdquo; is lying, or already caught.
+                  </p>
+                </div>
+
                 <div className="mt-3 flex items-center justify-between">
                   <p className="font-mono text-[10.5px] text-green-600">
                     zero bytes stored · zero bytes sent

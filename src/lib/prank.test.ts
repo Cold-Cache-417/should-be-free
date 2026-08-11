@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectBrowser, detectDevice, detectOS } from "./prank";
+import { detectBrowser, detectDevice, detectModel, detectOS } from "./prank";
 
 describe("detectBrowser", () => {
   it("detects the majors", () => {
@@ -26,5 +26,22 @@ describe("detectDevice", () => {
     expect(detectDevice("Windows NT 10.0")).toBe("Desktop");
     expect(detectDevice("iPhone; CPU iPhone OS 17_2")).toBe("Mobile");
     expect(detectDevice("iPad; CPU OS 17_2")).toBe("Tablet");
+  });
+});
+
+describe("detectModel", () => {
+  const scr = { w: 1512, h: 982, dpr: 2 };
+  it("prefers the exact UA-data model", () => {
+    expect(detectModel("Chrome/120 Android", "Pixel 8", scr, 8, 8)).toBe("Pixel 8");
+  });
+  it("matches a MacBook Pro from specs", () => {
+    expect(detectModel("Macintosh; Mac OS X 10_15_7", null, scr, 10, 32)).toContain("MacBook Pro");
+  });
+  it("matches a MacBook Air from modest specs", () => {
+    expect(detectModel("Macintosh; Mac OS X 10_15_7", null, { ...scr, dpr: 2 }, 4, 8)).toContain("MacBook Air");
+  });
+  it("stays honest when hidden", () => {
+    expect(detectModel("Windows NT 10.0", null, scr, 8, 16)).toContain("Windows PC");
+    expect(detectModel("X11; Linux x86_64", null, scr, 8, 16)).toContain("Linux");
   });
 });
