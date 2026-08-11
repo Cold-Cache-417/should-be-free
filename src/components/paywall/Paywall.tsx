@@ -123,8 +123,8 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
     setErrors({});
   };
 
-  const submitPayment = (e: FormEvent) => {
-    e.preventDefault();
+  const submitPayment = () => {
+    if (processing) return;
     const errs = validateCard(card);
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
@@ -138,6 +138,20 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
         setView("receipt");
       }, 1900),
     );
+  };
+
+  const onCheckoutSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    submitPayment();
+  };
+
+  const onCheckoutKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    // Explicit Enter handling so "Press Enter" always pays, even if
+    // implicit form submission is interrupted.
+    if (e.key === "Enter" && !processing) {
+      e.preventDefault();
+      submitPayment();
+    }
   };
 
   /* Focus the close button on open; trap Tab inside. */
@@ -222,7 +236,8 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
             setCard={setCard}
             onBack={backToTiers}
             onClose={onClose}
-            onSubmit={submitPayment}
+            onSubmit={onCheckoutSubmit}
+            onEnterPay={onCheckoutKeyDown}
           />
         )}
 
@@ -411,6 +426,7 @@ function CheckoutView({
   onBack,
   onClose,
   onSubmit,
+  onEnterPay,
 }: {
   tier: Tier;
   processing: boolean;
@@ -420,8 +436,9 @@ function CheckoutView({
   onBack: () => void;
   onClose: () => void;
   onSubmit: (e: FormEvent) => void;
+  onEnterPay: (e: React.KeyboardEvent<HTMLFormElement>) => void;
 }) {
-  const numberRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
   const panelInputs = useRef<Record<keyof CardFields, HTMLInputElement | null>>({
     name: null,
     number: null,
@@ -429,9 +446,9 @@ function CheckoutView({
     cvc: null,
   });
 
-  /* autofocus card number */
+  /* autofocus the first field — everything is typed by hand */
   useEffect(() => {
-    numberRef.current?.focus();
+    nameRef.current?.focus();
   }, []);
 
   /* focus the first invalid field when a submit fails */
@@ -491,14 +508,17 @@ function CheckoutView({
         </span>
       </div>
 
-      <form onSubmit={onSubmit} noValidate className="mt-4 space-y-3.5">
+      <form onSubmit={onSubmit} onKeyDown={onEnterPay} noValidate className="mt-4 space-y-3.5">
         <div>
           <label htmlFor="cc-name" className={labelCls}>
             Name on card
           </label>
           <input
             id="cc-name"
-            ref={(el) => { panelInputs.current.name = el; }}
+            ref={(el) => {
+              nameRef.current = el;
+              panelInputs.current.name = el;
+            }}
             autoComplete="cc-name"
             placeholder="Ada Lovelace"
             value={card.name}
@@ -517,10 +537,7 @@ function CheckoutView({
           <div className="relative">
             <input
               id="cc-number"
-              ref={(el) => {
-                numberRef.current = el;
-                panelInputs.current.number = el;
-              }}
+              ref={(el) => { panelInputs.current.number = el; }}
               autoComplete="cc-number"
               inputMode="numeric"
               placeholder="4242 4242 4242 4242"
@@ -579,6 +596,23 @@ function CheckoutView({
           </div>
         </div>
 
+        <div className="mt-2 flex items-center justify-center gap-1.5 text-[10.5px] text-zinc-600">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-3 w-3"
+            aria-hidden
+          >
+            <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+            <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+          </svg>
+          256-bit encryption · PCI-DSS pending
+        </div>
+
         <button
           type="submit"
           disabled={processing}
@@ -595,7 +629,7 @@ function CheckoutView({
               Processing payment…
             </>
           ) : (
-            <>Pay {moneyFor(tier.price)}</>
+            <>Pay {moneyFor(tier.price)} · Press Enter ↵</>
           )}
         </button>
 
@@ -703,8 +737,7 @@ function ReceiptView({
       </motion.p>
 
       <p className="mt-4 max-w-[300px] text-[13px] leading-relaxed text-zinc-400">
-        Payment infrastructure is currently experiencing a severe lack of
-        common sense.
+        Our payment gateway is currently on a well-deserved coffee break.
       </p>
       <p className="mt-1.5 text-[12px] text-zinc-500">
         Your answer has been unlocked anyway. That&rsquo;ll be {moneyFor(tier.price)}.
