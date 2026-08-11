@@ -1,5 +1,7 @@
 import { motion } from "motion/react";
 import type { CoinFace } from "../../lib/coin";
+import epsteinImg from "../../assets/coin/epstein.jpg";
+import diddyImg from "../../assets/coin/diddy.jpg";
 
 export type CoinPhase = "idle" | "flipping" | "locked" | "unlocked";
 
@@ -26,109 +28,100 @@ const LockBadge = (
   </svg>
 );
 
-/** Shared bust silhouette (head + shoulders), engraved dark on gold. */
-const Bust = (
-  <g fill="#5f3400">
-    <circle cx="50" cy="34" r="9" />
-    <path d="M44 41 L41 51.5 L28 57.5 C26.2 60 28 62.5 31 62.5 L69 62.5 C72 62.5 73.8 60 72 57.5 L59 51.5 L56 41 Z" />
-  </g>
-);
-
-function GoldFace({
-  id,
-  top,
-  bottom,
-  children,
-}: {
-  id: string;
-  top: string;
-  bottom: string;
-  children?: React.ReactNode;
-}) {
+/**
+ * Engraved lettering + milled rings stamped on top of the photo, so the
+ * face reads like a minted coin: dark fill with a light engraved edge.
+ */
+function Engraving({ id, top, bottom }: { id: string; top: string; bottom: string }) {
   return (
-    <svg viewBox="0 0 100 100" className="h-full w-full" aria-hidden focusable="false">
+    <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" aria-hidden>
       <defs>
-        <radialGradient id={`${id}Gold`} cx="34%" cy="26%" r="85%">
-          <stop offset="0%" stopColor="#ffe6ad" />
-          <stop offset="36%" stopColor="#f7b93f" />
-          <stop offset="70%" stopColor="#dd9218" />
-          <stop offset="100%" stopColor="#9a5c00" />
-        </radialGradient>
         <path id={`${id}ArcTop`} d="M25 50 A25 25 0 0 1 75 50" />
         <path id={`${id}ArcBot`} d="M25 50 A25 25 0 0 0 75 50" />
       </defs>
-
-      {/* disc */}
-      <circle cx="50" cy="50" r="47.5" fill={`url(#${id}Gold)`} />
-      <circle cx="50" cy="50" r="46.4" fill="none" stroke="#8a5300" strokeWidth="1.6" />
-      <circle cx="50" cy="50" r="41" fill="none" stroke="rgba(90,50,0,0.42)" strokeWidth="1" />
+      <circle cx="50" cy="50" r="47.2" fill="none" stroke="rgba(70,40,0,0.75)" strokeWidth="1.5" />
+      <circle cx="50" cy="50" r="41.2" fill="none" stroke="rgba(90,50,0,0.5)" strokeWidth="1" />
       <circle
         cx="50"
         cy="50"
-        r="36.2"
+        r="36.4"
         fill="none"
-        stroke="rgba(90,50,0,0.3)"
-        strokeWidth="0.8"
-        strokeDasharray="0.2 2.6"
+        stroke="rgba(90,50,0,0.38)"
+        strokeWidth="0.7"
+        strokeDasharray="0.2 2.4"
         strokeLinecap="round"
       />
-
-      {/* gloss */}
-      <ellipse cx="38" cy="27" rx="17" ry="8" fill="rgba(255,255,255,0.3)" transform="rotate(-16 38 27)" />
-
-      {/* engraved text */}
-      <text fontSize="6.8" fontWeight="800" letterSpacing="2.2" fill="#6b3d00" fontFamily="inherit">
+      <text
+        fontSize="6.8"
+        fontWeight="700"
+        letterSpacing="2.4"
+        fill="#4a2a00"
+        stroke="#ffdf9e"
+        strokeWidth="0.4"
+        paintOrder="stroke"
+        fontFamily="'Fraunces', Georgia, serif"
+      >
         <textPath href={`#${id}ArcTop`} startOffset="50%" textAnchor="middle">
           {top}
         </textPath>
       </text>
-      <text fontSize="5.2" fontWeight="700" letterSpacing="1.8" fill="#7a4a00" fontFamily="inherit">
+      <text
+        fontSize="5.4"
+        fontWeight="600"
+        letterSpacing="1.9"
+        fill="#5b3400"
+        stroke="#ffdf9e"
+        strokeWidth="0.3"
+        paintOrder="stroke"
+        fontFamily="'Fraunces', Georgia, serif"
+      >
         <textPath href={`#${id}ArcBot`} startOffset="50%" textAnchor="middle">
           {bottom}
         </textPath>
       </text>
-
-      {children}
     </svg>
   );
 }
 
-/** HEADS — Epstein, in a suit. */
-function HeadsFace() {
+/**
+ * One minted face: the portrait photographed onto metal — greyscale, gold
+ * tint, vignette, sheen — with the engraving stamped on top.
+ */
+function PhotoFace({
+  src,
+  alt,
+  pos,
+  id,
+  top,
+  bottom,
+}: {
+  src: string;
+  alt: string;
+  pos: string;
+  id: string;
+  top: string;
+  bottom: string;
+}) {
   return (
-    <GoldFace id="h" top="EPSTEIN" bottom="HEADS">
-      {Bust}
-      <path d="M50 52 L45.5 62.5 L54.5 62.5 Z" fill="#7a4a00" opacity="0.55" />
-    </GoldFace>
+    <div className="coin__photo" aria-hidden>
+      <img src={src} alt={alt} draggable={false} style={{ objectPosition: pos }} />
+      <div className="coin__tint" />
+      <div className="coin__shade" />
+      <div className="coin__sheen" />
+      <Engraving id={id} top={top} bottom={bottom} />
+    </div>
   );
 }
 
-/** TAILS — Diddy, with the chain. */
-function TailsFace() {
-  return (
-    <GoldFace id="t" top="DIDDY" bottom="TAILS">
-      {Bust}
-      <path
-        d="M41.5 53.5 Q50 60 58.5 53.5"
-        fill="none"
-        stroke="#5f3400"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <circle cx="50" cy="57.4" r="2.3" fill="none" stroke="#5f3400" strokeWidth="1.1" />
-    </GoldFace>
-  );
-}
-
-/** The two engraved gold faces. Front is Epstein, back is Diddy. */
+/** HEADS — Epstein. TAILS — Diddy. Both minted in gold. */
 function Faces() {
   return (
     <>
       <div className="coin__face coin__face--front">
-        <HeadsFace />
+        <PhotoFace src={epsteinImg} alt="Epstein" pos="50% 10%" id="h" top="EPSTEIN" bottom="HEADS" />
       </div>
       <div className="coin__face coin__face--back">
-        <TailsFace />
+        <PhotoFace src={diddyImg} alt="Diddy" pos="50% 8%" id="t" top="DIDDY" bottom="TAILS" />
       </div>
     </>
   );
@@ -204,6 +197,11 @@ function CoinSpin({
 export function Coin({ phase, result, flipCount, reduced = false }: CoinProps) {
   return (
     <div className="coin relative mx-auto h-36 w-36 sm:h-44 sm:w-44">
+      {/* warm gold aura behind the coin */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -inset-5 rounded-full bg-[radial-gradient(60%_60%_at_50%_45%,rgba(255,159,10,0.28),transparent_70%)]"
+      />
       <CoinSpin phase={phase} result={result} flipCount={flipCount} reduced={reduced} />
 
       {phase === "locked" && (

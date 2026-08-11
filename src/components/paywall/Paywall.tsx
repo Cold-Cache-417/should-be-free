@@ -323,7 +323,7 @@ function TiersView({
 
       {/* copy */}
       <div className="mt-5">
-        <h2 className="text-[26px] font-semibold tracking-[-0.02em] text-zinc-50 sm:text-[28px]">
+        <h2 className="font-display text-[29px] font-semibold tracking-[-0.01em] text-zinc-50 sm:text-[31px]">
           {headline}
         </h2>
         <p className="mt-2 text-[13.5px] leading-relaxed text-zinc-400">{subline}</p>
@@ -521,7 +521,7 @@ function CheckoutView({
         </button>
       </div>
 
-      <h2 className="mt-5 text-[24px] font-semibold tracking-[-0.02em] text-zinc-50">
+      <h2 className="font-display mt-5 text-[27px] font-semibold tracking-[-0.01em] text-zinc-50">
         Almost there.
       </h2>
       <p className="mt-1.5 text-[13px] text-zinc-400">{note}</p>
@@ -783,7 +783,7 @@ function DownloadingView({
         {DownloadGlyph}
       </span>
 
-      <h2 className="mt-4 text-[22px] font-semibold tracking-[-0.02em] text-zinc-50">
+      <h2 className="font-display mt-4 text-[25px] font-semibold tracking-[-0.01em] text-zinc-50">
         Downloading your result
       </h2>
 
@@ -893,7 +893,7 @@ function ReceiptView({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.12, duration: 0.45, ease: "easeOut" }}
-        className="mt-1 text-[52px] font-light tabular-nums tracking-[-0.03em] text-zinc-50"
+        className="font-display mt-1 text-[56px] font-light tracking-[-0.02em] text-zinc-50"
       >
         {value}
       </motion.p>

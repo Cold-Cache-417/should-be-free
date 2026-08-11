@@ -29,7 +29,7 @@ function Header() {
         className="group flex items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
       >
         <span className="transition-transform duration-200 group-hover:scale-105">{LogoMark}</span>
-        <h1 className="text-[19px] font-semibold tracking-[-0.02em] text-zinc-100">
+        <h1 className="font-display text-[21px] font-semibold tracking-[-0.01em] text-zinc-100">
           Should Be Free
         </h1>
         <span className="rounded-full border border-white/[0.1] bg-white/[0.05] px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.16em] text-zinc-400">

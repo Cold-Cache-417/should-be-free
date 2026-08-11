@@ -116,7 +116,7 @@ export function Home() {
         >
           {CoinMark}
         </motion.div>
-        <h1 className="mt-5 text-[34px] font-semibold tracking-[-0.03em] text-zinc-50 sm:text-[42px]">
+        <h1 className="font-display mt-5 text-[40px] font-semibold tracking-[-0.02em] text-zinc-50 sm:text-[48px]">
           Should Be Free
         </h1>
         <p className="mt-2 text-[15px] font-medium tracking-wide text-amber-300/90">
@@ -199,7 +199,7 @@ function CardBody({ app, available }: { app: AppCardData; available: boolean }) 
           </span>
         )}
       </div>
-      <h2 className="mt-4 text-[17px] font-semibold tracking-[-0.01em] text-zinc-100">{app.name}</h2>
+      <h2 className="font-display mt-4 text-[19px] font-semibold tracking-[-0.01em] text-zinc-100">{app.name}</h2>
       <p className="mt-1.5 flex-1 text-[12.5px] leading-relaxed text-zinc-500">{app.description}</p>
       {available && (
         <span className="mt-4 inline-flex items-center gap-1 text-[12.5px] font-semibold text-amber-300 transition-transform duration-200 group-hover:translate-x-0.5">

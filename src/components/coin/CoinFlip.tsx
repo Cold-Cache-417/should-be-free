@@ -131,7 +131,6 @@ export function CoinFlip() {
   const [paywall, setPaywall] = useState<null | "result" | "rig">(null);
   const [rig, setRig] = useState<RigState | null>(null);
   const [chosenSide, setChosenSide] = useState<CoinFace | null>(null);
-  const [lastFlipRigged, setLastFlipRigged] = useState(false);
   const timers = useRef<number[]>([]);
   const reduced = useRef(false);
 
@@ -147,19 +146,22 @@ export function CoinFlip() {
     const face = isRigged ? chosenSide : flipCoin();
     setResult(face);
     setFlipCount((n) => n + 1);
-    setLastFlipRigged(isRigged);
     setChosenSide(null);
     setPhase("flipping");
 
     // A per-flip rig is consumed the moment the flip is thrown.
     if (isRigged && rig && !rig.unlimited) setRig(null);
 
-    /* The coin settles, then the result is locked and the paywall springs
-       in — the face is never shown before payment. */
+    /* The coin settles. Rigged flips reveal immediately — you already paid
+       for the outcome. Fair flips lock and hit the reveal paywall. */
     timers.current.push(
       window.setTimeout(() => {
-        setPhase("locked");
-        timers.current.push(window.setTimeout(() => setPaywall("result"), 0));
+        if (isRigged) {
+          setPhase("unlocked");
+        } else {
+          setPhase("locked");
+          timers.current.push(window.setTimeout(() => setPaywall("result"), 0));
+        }
       }, reduced.current ? 320 : 1900),
     );
   };
@@ -271,12 +273,12 @@ export function CoinFlip() {
                 transition={{ duration: 0.18, ease: "easeOut" }}
                 aria-hidden={locked}
                 className={cn(
-                  "whitespace-nowrap text-[30px] font-light tabular-nums leading-none",
+                  "font-display whitespace-nowrap text-[34px] font-light leading-none",
                   locked
                     ? "select-none tracking-[0.2em] text-amber-300/80"
                     : phase === "unlocked"
-                      ? "text-zinc-100 tracking-[-0.02em]"
-                      : "text-zinc-400 tracking-[-0.02em]",
+                      ? "text-zinc-100 tracking-[-0.01em]"
+                      : "italic text-zinc-400 tracking-[-0.01em]",
                 )}
               >
                 {mainText}
@@ -377,7 +379,9 @@ export function CoinFlip() {
               )}
             </button>
             <p className="mt-3 text-center text-[11px] text-zinc-600">
-              Fair odds: 50/50 · Fair price: $5.
+              {rigged
+                ? "Rigged odds: 100/0 · Rig price: $25"
+                : "Fair odds: 50/50 · Fair price: $5."}
             </p>
 
             {!rigged && (
@@ -400,7 +404,7 @@ export function CoinFlip() {
             key="coin-paywall"
             tiers={REVEAL_TIERS}
             value={result ? faceLabel(result) : ""}
-            line={`Flip #${flipCount}${lastFlipRigged ? " · rigged" : ""}`}
+            line={`Flip #${flipCount}`}
             masked="••••"
             brand="Flip Pro"
             receiptBrand="FLIP PRO"
