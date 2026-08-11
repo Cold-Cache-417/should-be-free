@@ -5,6 +5,7 @@ import { Footer } from "./components/Footer";
 import { Home } from "./components/home/Home";
 import { Calculator } from "./components/calculator/Calculator";
 import { CoinFlip } from "./components/coin/CoinFlip";
+import { Stopwatch } from "./components/stopwatch/Stopwatch";
 import { useHashRoute } from "./lib/useHashRoute";
 
 const LogoMark = (
@@ -82,7 +83,13 @@ export default function App() {
   }, [route]);
 
   const page =
-    route === "/calculator" ? "calculator" : route === "/flip" ? "flip" : "home";
+    route === "/calculator"
+      ? "calculator"
+      : route === "/flip"
+        ? "flip"
+        : route === "/stopwatch"
+          ? "stopwatch"
+          : "home";
 
   return (
     <MotionConfig reducedMotion="user">
@@ -107,6 +114,12 @@ export default function App() {
             <>
               <BackLink />
               <CoinFlip />
+            </>
+          )}
+          {page === "stopwatch" && (
+            <>
+              <BackLink />
+              <Stopwatch />
             </>
           )}
         </motion.main>

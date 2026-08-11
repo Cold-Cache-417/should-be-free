@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import type { CoinFace } from "../../lib/coin";
 import epsteinImg from "../../assets/coin/epstein.jpg";
@@ -28,88 +29,186 @@ const LockBadge = (
   </svg>
 );
 
-/**
- * Engraved lettering + milled rings stamped on top of the photo, so the
- * face reads like a minted coin: dark fill with a light engraved edge.
- */
-function Engraving({ id, top, bottom }: { id: string; top: string; bottom: string }) {
-  return (
-    <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" aria-hidden>
-      <defs>
-        <path id={`${id}ArcTop`} d="M25 50 A25 25 0 0 1 75 50" />
-        <path id={`${id}ArcBot`} d="M25 50 A25 25 0 0 0 75 50" />
-      </defs>
-      <circle cx="50" cy="50" r="47.2" fill="none" stroke="rgba(70,40,0,0.75)" strokeWidth="1.5" />
-      <circle cx="50" cy="50" r="41.2" fill="none" stroke="rgba(90,50,0,0.5)" strokeWidth="1" />
-      <circle
-        cx="50"
-        cy="50"
-        r="36.4"
-        fill="none"
-        stroke="rgba(90,50,0,0.38)"
-        strokeWidth="0.7"
-        strokeDasharray="0.2 2.4"
-        strokeLinecap="round"
-      />
-      <text
-        fontSize="6.8"
-        fontWeight="700"
-        letterSpacing="2.4"
-        fill="#4a2a00"
-        stroke="#ffdf9e"
-        strokeWidth="0.4"
-        paintOrder="stroke"
-        fontFamily="'Fraunces', Georgia, serif"
-      >
-        <textPath href={`#${id}ArcTop`} startOffset="50%" textAnchor="middle">
-          {top}
-        </textPath>
-      </text>
-      <text
-        fontSize="5.4"
-        fontWeight="600"
-        letterSpacing="1.9"
-        fill="#5b3400"
-        stroke="#ffdf9e"
-        strokeWidth="0.3"
-        paintOrder="stroke"
-        fontFamily="'Fraunces', Georgia, serif"
-      >
-        <textPath href={`#${id}ArcBot`} startOffset="50%" textAnchor="middle">
-          {bottom}
-        </textPath>
-      </text>
-    </svg>
-  );
+interface FaceOpts {
+  src: string;
+  /** Where to aim the vertical crop (0–1 down the photo). */
+  posY: number;
+  /** Bust zoom — larger = tighter on the face. */
+  zoom: number;
+  /** Zoom pivot point (0–1 down the coin) — centers the face. */
+  originY: number;
+  top: string;
+  bottom: string;
 }
 
 /**
- * One minted face: the portrait photographed onto metal — greyscale, gold
- * tint, vignette, sheen — with the engraving stamped on top.
+ * One minted face, drawn entirely in SVG: a gold disc, the portrait's
+ * luminance sculpted into bas-relief by diffuse + specular lighting, a
+ * vignette that melts it into the metal, then milled rings and engraved
+ * lettering stamped on top. The crop geometry is computed from the photo's
+ * real dimensions so the face sits dead-center on the coin.
  */
-function PhotoFace({
-  src,
-  alt,
-  pos,
-  id,
-  top,
-  bottom,
-}: {
-  src: string;
-  alt: string;
-  pos: string;
-  id: string;
-  top: string;
-  bottom: string;
-}) {
+function ReliefFace({ id, opts }: { id: string; opts: FaceOpts }) {
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const im = new Image();
+    im.onload = () => {
+      if (alive) setDims({ w: im.naturalWidth, h: im.naturalHeight });
+    };
+    im.src = opts.src;
+    return () => {
+      alive = false;
+    };
+  }, [opts.src]);
+
+  const S = 200;
+  let crop: { x: number; y: number; rw: number; rh: number; cx: number; cy: number } | null = null;
+  if (dims) {
+    const scale = Math.max(S / dims.w, S / dims.h);
+    const rw = dims.w * scale;
+    const rh = dims.h * scale;
+    crop = {
+      x: 0.5 * (S - rw),
+      y: opts.posY * (S - rh),
+      rw,
+      rh,
+      cx: 100,
+      cy: opts.originY * S,
+    };
+  }
+
   return (
-    <div className="coin__photo" aria-hidden>
-      <img src={src} alt={alt} draggable={false} style={{ objectPosition: pos }} />
-      <div className="coin__tint" />
-      <div className="coin__shade" />
-      <div className="coin__sheen" />
-      <Engraving id={id} top={top} bottom={bottom} />
-    </div>
+    <svg viewBox="0 0 200 200" className="h-full w-full" aria-hidden>
+      <defs>
+        <radialGradient id={`${id}-g`} cx="0.34" cy="0.26" r="0.92">
+          <stop offset="0" stopColor="#ffe6ad" />
+          <stop offset="0.36" stopColor="#f7b93f" />
+          <stop offset="0.7" stopColor="#dd9218" />
+          <stop offset="1" stopColor="#9a5c00" />
+        </radialGradient>
+        <radialGradient id={`${id}-vig`} cx="0.5" cy="0.46" r="0.74">
+          <stop offset="0.5" stopColor="#000" stopOpacity="0" />
+          <stop offset="0.82" stopColor="#3a2000" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#241200" stopOpacity="0.92" />
+        </radialGradient>
+        <linearGradient id={`${id}-sh`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#fffdf4" stopOpacity="0.6" />
+          <stop offset="0.4" stopColor="#fffdf4" stopOpacity="0.04" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <clipPath id={`${id}-c`}>
+          <circle cx="100" cy="100" r="96" />
+        </clipPath>
+        <filter id={`${id}-r`} x="-30%" y="-30%" width="160%" height="160%">
+          <feColorMatrix type="saturate" values="0" result="gray" />
+          <feColorMatrix in="gray" type="luminanceToAlpha" result="bump" />
+          <feGaussianBlur in="bump" stdDeviation="1" result="smooth" />
+          {/* shade the grayscale photo with the bump-mapped light */}
+          <feDiffuseLighting
+            in="smooth"
+            surfaceScale="14"
+            diffuseConstant="1.15"
+            lightingColor="#ffd98a"
+            result="diffuse"
+          >
+            <fePointLight x="150" y="60" z="260" />
+          </feDiffuseLighting>
+          <feComposite
+            in="gray"
+            in2="diffuse"
+            operator="arithmetic"
+            k1="1"
+            k2="0"
+            k3="0"
+            k4="0"
+            result="shaded"
+          />
+          {/* metallic glints on the raised features */}
+          <feSpecularLighting
+            in="smooth"
+            surfaceScale="10"
+            specularConstant="0.7"
+            specularExponent="32"
+            lightingColor="#fffdf4"
+            result="specular"
+          >
+            <fePointLight x="150" y="60" z="260" />
+          </feSpecularLighting>
+          <feComposite
+            in="shaded"
+            in2="specular"
+            operator="arithmetic"
+            k1="0"
+            k2="1"
+            k3="0.5"
+            k4="0"
+          />
+        </filter>
+        <path id={`${id}-aTop`} d="M 50 100 A 50 50 0 0 1 150 100" />
+        <path id={`${id}-aBot`} d="M 50 100 A 50 50 0 0 0 150 100" />
+      </defs>
+
+      {/* gold disc */}
+      <circle cx="100" cy="100" r="99" fill={`url(#${id}-g)`} />
+
+      {/* the sculpted portrait */}
+      <g clipPath={`url(#${id}-c)`}>
+        {crop && dims ? (
+          <>
+            <image
+              href={opts.src}
+              x={crop.x}
+              y={crop.y}
+              width={crop.rw}
+              height={crop.rh}
+              filter={`url(#${id}-r)`}
+              transform={`translate(${crop.cx} ${crop.cy}) scale(${opts.zoom}) translate(${-crop.cx} ${-crop.cy})`}
+            />
+            <rect x="0" y="0" width="200" height="200" fill={`url(#${id}-vig)`} />
+            <ellipse cx="70" cy="50" rx="100" ry="58" fill={`url(#${id}-sh)`} transform="rotate(-14 70 50)" />
+          </>
+        ) : (
+          <circle cx="100" cy="100" r="96" fill={`url(#${id}-g)`} />
+        )}
+      </g>
+
+      {/* milled rings */}
+      <circle cx="100" cy="100" r="97.5" fill="none" stroke="#5f3400" strokeOpacity="0.8" strokeWidth="2" />
+      <circle cx="100" cy="100" r="90" fill="none" stroke="#5f3400" strokeOpacity="0.45" strokeWidth="1.4" />
+      <circle cx="100" cy="100" r="82" fill="none" stroke="#5f3400" strokeOpacity="0.32" strokeWidth="1" strokeDasharray="0.5 5" />
+
+      {/* engraved lettering */}
+      <text
+        fontSize="15"
+        fontWeight="700"
+        letterSpacing="3"
+        fill="#4a2a00"
+        stroke="#ffe6ad"
+        strokeWidth="0.6"
+        paintOrder="stroke"
+        fontFamily="Fraunces, Georgia, serif"
+      >
+        <textPath href={`#${id}-aTop`} startOffset="50%" textAnchor="middle">
+          {opts.top}
+        </textPath>
+      </text>
+      <text
+        fontSize="12"
+        fontWeight="600"
+        letterSpacing="2.5"
+        fill="#5b3400"
+        stroke="#ffe6ad"
+        strokeWidth="0.5"
+        paintOrder="stroke"
+        fontFamily="Fraunces, Georgia, serif"
+      >
+        <textPath href={`#${id}-aBot`} startOffset="50%" textAnchor="middle">
+          {opts.bottom}
+        </textPath>
+      </text>
+    </svg>
   );
 }
 
@@ -118,10 +217,30 @@ function Faces() {
   return (
     <>
       <div className="coin__face coin__face--front">
-        <PhotoFace src={epsteinImg} alt="Epstein" pos="50% 10%" id="h" top="EPSTEIN" bottom="HEADS" />
+        <ReliefFace
+          id="h"
+          opts={{
+            src: epsteinImg,
+            posY: 0.28,
+            zoom: 1.42,
+            originY: 0.24,
+            top: "EPSTEIN",
+            bottom: "HEADS",
+          }}
+        />
       </div>
       <div className="coin__face coin__face--back">
-        <PhotoFace src={diddyImg} alt="Diddy" pos="50% 8%" id="t" top="DIDDY" bottom="TAILS" />
+        <ReliefFace
+          id="t"
+          opts={{
+            src: diddyImg,
+            posY: 0.02,
+            zoom: 1.8,
+            originY: 0.52,
+            top: "DIDDY",
+            bottom: "TAILS",
+          }}
+        />
       </div>
     </>
   );

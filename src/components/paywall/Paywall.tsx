@@ -101,9 +101,15 @@ export function Paywall({
   const [processing, setProcessing] = useState(false);
   const [card, setCard] = useState<CardFields>({ name: "", number: "", expiry: "", cvc: "" });
   const [errors, setErrors] = useState<CardErrors>({});
-  /* Capture the locked line/value once on open — the app behind unlocks the
-     moment payment succeeds, which would otherwise blank these out. */
-  const [meta] = useState(() => ({ line: line ?? "", value }));
+  /* Capture the locked line once on open — the app behind unlocks the moment
+     payment succeeds, which would otherwise blank it out. The value is
+     re-read when the receipt mounts so live values (e.g. a stopwatch that
+     keeps ticking until payment) are shown at their final moment. */
+  const [meta, setMeta] = useState(() => ({ line: line ?? "", value }));
+
+  useEffect(() => {
+    if (view === "receipt") setMeta((m) => (m.value === value ? m : { ...m, value }));
+  }, [view, value]);
   const timers = useRef<number[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
 

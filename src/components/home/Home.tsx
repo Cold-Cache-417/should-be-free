@@ -58,6 +58,20 @@ const Apps: AppCardData[] = [
     ),
   },
   {
+    id: "stopwatch",
+    name: "Stopwatch",
+    description: "Time is money. The timer is free — pausing it costs you.",
+    price: "Pauses from $10",
+    href: "#/stopwatch",
+    available: true,
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <circle cx="12" cy="13" r="8" />
+        <path d="M9 2h6M12 5V2M12 13l3-2" />
+      </svg>
+    ),
+  },
+  {
     id: "weather",
     name: "Weather",
     description: "Today's forecast, free. Tomorrow's forecast, premium. The future costs money.",
