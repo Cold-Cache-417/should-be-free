@@ -222,8 +222,8 @@ function Faces() {
           opts={{
             src: epsteinImg,
             posY: 0.28,
-            zoom: 1.42,
-            originY: 0.24,
+            zoom: 1.15,
+            originY: 0.26,
             top: "EPSTEIN",
             bottom: "HEADS",
           }}
@@ -235,8 +235,8 @@ function Faces() {
           opts={{
             src: diddyImg,
             posY: 0.02,
-            zoom: 1.8,
-            originY: 0.52,
+            zoom: 1.3,
+            originY: 0.03,
             top: "DIDDY",
             bottom: "TAILS",
           }}

@@ -34,8 +34,32 @@ const PAUSE_TIERS: PaywallTier[] = [
   },
 ];
 
-const RING_R = 62;
-const RING_C = 2 * Math.PI * RING_R;
+const DIAL = 240;
+const C = 2 * Math.PI * 88; // circumference of the sweep arc (r=88)
+
+/** The 60 tick marks of the dial — longer every 5 seconds, like a watch. */
+function Ticks() {
+  const ticks = [];
+  for (let i = 0; i < 60; i++) {
+    const a = (i * 6 * Math.PI) / 180;
+    const major = i % 5 === 0;
+    const r1 = major ? 97 : 101;
+    const r2 = 108.5;
+    ticks.push(
+      <line
+        key={i}
+        x1={120 + r1 * Math.sin(a)}
+        y1={120 - r1 * Math.cos(a)}
+        x2={120 + r2 * Math.sin(a)}
+        y2={120 - r2 * Math.cos(a)}
+        stroke={major ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.13)"}
+        strokeWidth={major ? 2.4 : 1.4}
+        strokeLinecap="round"
+      />,
+    );
+  }
+  return <>{ticks}</>;
+}
 
 export function Stopwatch() {
   const [phase, setPhase] = useState<WatchPhase>("idle");
@@ -111,8 +135,11 @@ export function Stopwatch() {
   const paused = phase === "paused";
   const minuteFrac = (elapsedMs % 60000) / 60000;
   const cost = costFor(elapsedMs);
+  const [main, cs] = splitTime(elapsedMs);
 
-  const primaryLabel = phase === "idle" ? "Start" : running ? "Pause — $10" : "Resume (free)";
+  const primaryIsStart = phase === "idle";
+  const primaryIsPause = running;
+  const primaryLabel = primaryIsStart ? "Start" : primaryIsPause ? "Pause — $10" : "Resume (free)";
 
   return (
     <>
@@ -160,87 +187,112 @@ export function Stopwatch() {
             </div>
           </div>
 
-          {/* the face */}
-          <div className="relative flex justify-center px-2 pt-6 sm:pt-7">
-            <div className="relative h-44 w-44 sm:h-48 sm:w-48">
-              {/* progress ring */}
-              <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90" aria-hidden>
-                <circle cx="70" cy="70" r={RING_R} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="5" />
+          {/* the dial */}
+          <div className="relative flex justify-center px-2 pb-1 pt-5 sm:pt-6">
+            <div className="relative h-[252px] w-[252px] sm:h-[264px] sm:w-[264px]">
+              <svg viewBox={`0 0 ${DIAL} ${DIAL}`} className="h-full w-full -rotate-90" aria-hidden>
+                {/* dial rim */}
+                <circle
+                  cx="120"
+                  cy="120"
+                  r="112"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.1)"
+                  strokeWidth="1.5"
+                />
+                <Ticks />
+                {/* progress ring track */}
+                <circle
+                  cx="120"
+                  cy="120"
+                  r="88"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.055)"
+                  strokeWidth="6"
+                />
+                {/* the sweep — one full ring per minute, in billing amber */}
                 <motion.circle
-                  cx="70"
-                  cy="70"
-                  r={RING_R}
+                  cx="120"
+                  cy="120"
+                  r="88"
                   fill="none"
                   stroke="url(#sw-ring)"
-                  strokeWidth="5"
+                  strokeWidth="6"
                   strokeLinecap="round"
-                  strokeDasharray={RING_C}
-                  animate={{ strokeDashoffset: RING_C * (1 - (running || paused ? minuteFrac : 0)) }}
-                  transition={{ duration: 0.1, ease: "linear" }}
+                  strokeDasharray={C}
+                  animate={{ strokeDashoffset: C * (1 - minuteFrac) }}
+                  transition={{ duration: 0.06, ease: "linear" }}
                 />
                 <defs>
                   <linearGradient id="sw-ring" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#ffb340" />
+                    <stop offset="0%" stopColor="#ffc75f" />
                     <stop offset="100%" stopColor="#ff9505" />
                   </linearGradient>
                 </defs>
               </svg>
 
-              {/* time */}
+              {/* centered readout */}
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="font-display whitespace-nowrap text-[34px] font-light tabular-nums leading-none text-zinc-50">
-                  {formatTime(elapsedMs)}
-                </span>
-                <span
-                  className={cn(
-                    "mt-2.5 font-mono text-[13px] font-medium tabular-nums tracking-wide",
-                    running ? "text-amber-300" : "text-zinc-500",
-                  )}
-                >
-                  {running ? "This moment is costing you" : paused ? "Stopped at" : "You pay to pause"}
-                </span>
-                <span
-                  className={cn(
-                    "font-display mt-0.5 text-[22px] font-semibold tabular-nums leading-none",
-                    running ? "text-amber-300" : "text-zinc-400",
-                  )}
-                >
-                  {formatMoney(cost)}
-                </span>
+                <div className="flex items-baseline tabular-nums tracking-[-0.02em] text-zinc-50">
+                  <span className="text-[44px] font-extralight leading-none sm:text-[48px]">
+                    {main}
+                  </span>
+                  <span className="ml-0.5 text-[26px] font-light leading-none text-amber-300">
+                    .{cs}
+                  </span>
+                </div>
+
+                <div className="mt-4 flex items-baseline gap-1.5">
+                  <span
+                    className={cn(
+                      "text-[11px] font-medium tracking-wide",
+                      running ? "text-zinc-400" : "text-zinc-600",
+                    )}
+                  >
+                    {running ? "This moment is costing you" : paused ? "You paid to stop at" : "You pay to pause"}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[17px] font-semibold tabular-nums tracking-tight",
+                      running ? "text-amber-300" : "text-zinc-500",
+                    )}
+                  >
+                    {formatMoney(cost)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* actions */}
-          <div className="mt-6 px-1.5 pb-2">
-            <button
-              id="sw-primary"
-              type="button"
-              onClick={phase === "idle" ? start : running ? requestPause : resume}
-              className="flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:scale-[0.98]"
-              style={{
-                background: "linear-gradient(180deg,#ffb340,#ff9505)",
-                color: "#2a1800",
-                boxShadow:
-                  "0 4px 20px -6px rgba(255,149,5,0.65), inset 0 1px 0 rgba(255,255,255,0.35)",
-              }}
-            >
-              {primaryLabel}
-            </button>
-
+          {/* actions — Apple-style capsules */}
+          <div className="mt-5 grid grid-cols-2 gap-3 px-1.5 pb-2">
             <button
               type="button"
               onClick={reset}
               disabled={phase === "idle"}
-              className="mt-2.5 flex h-10 w-full items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] text-[12.5px] font-semibold text-zinc-300 transition-all duration-150 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 disabled:cursor-default disabled:opacity-40 active:scale-[0.98]"
+              className="flex h-[54px] items-center justify-center rounded-full bg-white/[0.1] text-[15px] font-semibold text-zinc-100 transition-all duration-150 hover:bg-white/[0.16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 active:scale-[0.97] disabled:cursor-default disabled:opacity-35 disabled:hover:bg-white/[0.1]"
             >
               Reset
             </button>
 
-            <p className="mt-3 text-center text-[11px] text-zinc-600">
-              Time is money. Pausing is a premium feature.
-            </p>
+            <button
+              id="sw-primary"
+              type="button"
+              onClick={primaryIsStart ? start : primaryIsPause ? requestPause : resume}
+              className={cn(
+                "flex h-[54px] items-center justify-center gap-1.5 rounded-full text-[15px] font-semibold text-white transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 active:scale-[0.97]",
+                primaryIsPause
+                  ? "bg-[#ff453a] shadow-[0_8px_28px_-10px_rgba(255,69,58,0.7)]"
+                  : "bg-[#30d158] shadow-[0_8px_28px_-10px_rgba(48,209,88,0.55)]",
+              )}
+            >
+              {primaryLabel}
+            </button>
           </div>
+
+          <p className="mt-3 text-center text-[11px] text-zinc-600">
+            Time is money. Pausing is a premium feature.
+          </p>
         </div>
       </motion.section>
 
@@ -267,4 +319,17 @@ export function Stopwatch() {
       </AnimatePresence>
     </>
   );
+}
+
+/** Split mm:ss from the centiseconds for the two-weight Apple readout. */
+function splitTime(ms: number): [string, string] {
+  const total = Math.max(0, Math.floor(ms));
+  const cs = Math.floor(total / 10) % 100;
+  const sec = Math.floor(total / 1000) % 60;
+  const min = Math.floor(total / 60000) % 60;
+  const hr = Math.floor(total / 3600000);
+  const cc = String(cs).padStart(2, "0");
+  const ss = String(sec).padStart(2, "0");
+  const mm = String(min).padStart(2, "0");
+  return hr > 0 ? [`${hr}:${mm}:${ss}`, cc] : [`${mm}:${ss}`, cc];
 }
