@@ -92,7 +92,7 @@ class FakeUpstash {
 vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://mock.upstash.io");
 vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "test-token");
 
-const { POST, GET } = await import("./analytics");
+const { POST, GET } = await import("../../api/analytics.js");
 
 let fake: FakeUpstash;
 

@@ -20,7 +20,7 @@ import {
   parseUa,
   type GlobalAnalytics,
   type RecentEntry,
-} from "../src/lib/analyticsServer";
+} from "../src/lib/analyticsServer.js";
 
 const REST_URL = process.env.UPSTASH_REDIS_REST_URL ?? "";
 const REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? "";
