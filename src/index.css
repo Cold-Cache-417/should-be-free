@@ -65,36 +65,53 @@ body {
 .aurora__orb {
   position: absolute;
   border-radius: 9999px;
-  filter: blur(90px);
-  mix-blend-mode: screen;
+  /* Pre-blurred radial gradients: the soft falloff IS the blur, so no
+     `filter: blur()` and no `mix-blend-mode` — both force the GPU to
+     re-rasterize/re-blend every frame. Plain alpha compositing of a
+     gradient texture is cheap. Transforms only. */
   will-change: transform;
 }
 
 .aurora__orb--a {
-  width: 58vmax;
-  height: 58vmax;
-  left: -20vmax;
-  top: -26vmax;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.5), transparent 66%);
-  animation: drift-a 30s ease-in-out infinite alternate;
+  width: 68vmax;
+  height: 68vmax;
+  left: -24vmax;
+  top: -30vmax;
+  background: radial-gradient(
+    circle at center,
+    rgba(99, 102, 241, 0.2) 0%,
+    rgba(99, 102, 241, 0.1) 32%,
+    transparent 68%
+  );
+  animation: drift-a 36s ease-in-out infinite alternate;
 }
 
 .aurora__orb--b {
-  width: 48vmax;
-  height: 48vmax;
-  right: -22vmax;
-  top: 6vmax;
-  background: radial-gradient(circle, rgba(255, 159, 10, 0.16), transparent 66%);
-  animation: drift-b 38s ease-in-out infinite alternate;
+  width: 56vmax;
+  height: 56vmax;
+  right: -26vmax;
+  top: 4vmax;
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 159, 10, 0.11) 0%,
+    rgba(255, 159, 10, 0.05) 34%,
+    transparent 68%
+  );
+  animation: drift-b 44s ease-in-out infinite alternate;
 }
 
 .aurora__orb--c {
-  width: 44vmax;
-  height: 44vmax;
-  left: 24vmax;
-  bottom: -32vmax;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.13), transparent 66%);
-  animation: drift-c 46s ease-in-out infinite alternate;
+  width: 50vmax;
+  height: 50vmax;
+  left: 26vmax;
+  bottom: -36vmax;
+  background: radial-gradient(
+    circle at center,
+    rgba(56, 189, 248, 0.09) 0%,
+    rgba(56, 189, 248, 0.04) 34%,
+    transparent 68%
+  );
+  animation: drift-c 52s ease-in-out infinite alternate;
 }
 
 .aurora__vignette {
@@ -155,7 +172,6 @@ body {
     filter 170ms ease,
     box-shadow 170ms ease,
     opacity 200ms ease;
-  will-change: transform;
 }
 
 .key:active,

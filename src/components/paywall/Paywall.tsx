@@ -220,7 +220,7 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 26, scale: 0.97, transition: { duration: 0.22, ease: "easeIn" } }}
         transition={{ type: "spring", stiffness: 300, damping: 28, mass: 0.92 }}
-        className="relative z-10 max-h-[92dvh] w-full max-w-[520px] overflow-y-auto rounded-[1.9rem] border border-white/10 bg-[#141419]/[0.96] p-5 shadow-[0_50px_120px_-30px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:p-7"
+        className="relative z-10 max-h-[92dvh] w-full max-w-[520px] overflow-y-auto rounded-[1.9rem] border border-white/10 bg-[#141419]/[0.97] p-5 shadow-[0_50px_120px_-30px_rgba(0,0,0,0.9)] sm:p-7"
       >
         {/* top hairline */}
         <div
