@@ -14,7 +14,7 @@ Every app here does one simple thing and charges you for the outcome.
 | **Calculator** | A real calculator: precedence, decimals, %, ±, keyboard input. | The answer costs $20. |
 | **Coin Flip** | A fair coin with Epstein/Diddy engravings, riggable. | The result costs $5 — the rig costs $25. |
 | **Stopwatch** | Bills you $10/minute the whole time it runs. | Pausing the meter costs $10. |
-| **Weather** | Today's forecast, free. | Tomorrow's forecast costs $10 (static array). |
+| **Weather** | Real forecasts in °C from Open-Meteo, every layer paywalled. | The temperature costs $5. The conditions cost $10. The details cost $15. |
 | **Word Counter** | Counts your words as you type. | The count costs $8. |
 | **Hacker Prank** | Reads the visitor's own browser back to them, live. | Nothing is stored — the scare is the prank. |
 
@@ -53,6 +53,24 @@ npm run dev      # local dev server
 npm run test     # vitest (engine + reducer + coin + card)
 npm run build    # typecheck + production build → dist/
 ```
+
+## Admin analytics
+
+Type **`admin`** anywhere on the site to open the dashboard — total visits,
+per-app usage, 14-day / 24-hour series, countries, browsers, devices,
+referrers, and recent visits. All anonymous aggregates: no names, no
+fingerprints, no per-visitor profiles.
+
+The dashboard reads from a serverless API (`api/analytics.ts`) backed by
+Upstash Redis. To turn it on:
+
+1. Create a free [Upstash](https://upstash.com) Redis database.
+2. In Vercel → your project → **Settings → Environment Variables**, add:
+   - `UPSTASH_REDIS_REST_URL` — e.g. `https://xxx.upstash.io`
+   - `UPSTASH_REDIS_REST_TOKEN` — the REST token
+3. Redeploy. Visits and app usage now count globally, from every visitor.
+   Without the env vars the API answers 503 and the site silently falls back
+   to per-browser localStorage counts.
 
 ## Deploy
 

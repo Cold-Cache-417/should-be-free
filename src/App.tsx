@@ -11,6 +11,7 @@ import { WordCounter } from "./components/words/WordCounter";
 import { HackerPrank } from "./components/hack/HackerPrank";
 import { AdminDashboard } from "./components/admin/AdminDashboard";
 import { ANALYTICS_KEY, loadAnalytics, saveAnalytics, withApp, withVisit } from "./lib/analytics";
+import { reportAnalytics } from "./lib/remoteAnalytics";
 import { useHashRoute } from "./lib/useHashRoute";
 
 const LogoMark = (
@@ -111,11 +112,12 @@ export default function App() {
     set: (v: string) => localStorage.setItem(ANALYTICS_KEY, v),
   };
 
-  /* Aggregate analytics — one visit per page load. */
+  /* Aggregate analytics — one visit per page load, local mirror + server ping. */
   useEffect(() => {
     if (visitedRef.current) return;
     visitedRef.current = true;
     saveAnalytics(withVisit(loadAnalytics(store)), store);
+    reportAnalytics("visit");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -124,6 +126,7 @@ export default function App() {
     if (lastAppRef.current === page) return;
     lastAppRef.current = page;
     saveAnalytics(withApp(loadAnalytics(store), page), store);
+    reportAnalytics("app", page);
   }, [page]);
 
   /* Type "admin" anywhere to open the dashboard. */
