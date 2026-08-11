@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { formatNumber } from "../../lib/calculator";
 import {
   cardBrand,
   formatCardNumber,
@@ -13,11 +12,10 @@ import {
 } from "../../lib/card";
 import { cn } from "../../lib/cn";
 
-type TierId = "quick" | "monthly" | "yearly";
 type View = "tiers" | "checkout" | "downloading" | "receipt";
 
-interface Tier {
-  id: TierId;
+export interface PaywallTier {
+  id: string;
   name: string;
   price: string;
   period: string;
@@ -28,35 +26,29 @@ interface Tier {
   cta: string;
 }
 
-const TIERS: Tier[] = [
-  {
-    id: "quick",
-    name: "Quick Answer",
-    price: "$20",
-    period: "one-time",
-    description: "Reveal the answer to your current calculation.",
-    badge: "For this answer only",
-    featured: true,
-    cta: "Unlock answer",
-  },
-  {
-    id: "monthly",
-    name: "Pro Monthly",
-    price: "$250",
-    period: "/month",
-    description: "Unlimited access to premium calculations.",
-    cta: "Start monthly",
-  },
-  {
-    id: "yearly",
-    name: "Pro Yearly",
-    price: "$2,000",
-    period: "/year",
-    description: "Unlimited premium calculations for an entire year.",
-    note: "Yes, I'm generous. I made it cheaper.",
-    cta: "Go yearly",
-  },
-];
+interface PaywallProps {
+  tiers: PaywallTier[];
+  /** The revealed value, e.g. "4" or "HEADS". */
+  value: string;
+  /** Line shown in the locked preview / download / receipt, e.g. "2 + 2 =" or "Flip #2". */
+  line?: string;
+  /** Masked placeholder while locked, e.g. "••••". */
+  masked?: string;
+  /** Chip label in the top-left, e.g. "Calculator Pro". */
+  brand?: string;
+  /** Brand printed on the receipt, e.g. "CALCULATOR PRO". */
+  receiptBrand?: string;
+  /** Filename used in the "downloading" phase. */
+  filename?: string;
+  headline?: string;
+  subline?: string;
+  checkoutNote?: string;
+  returnLabel?: string;
+  dialogLabel?: string;
+  onClose: () => void;
+  /** Called the moment the (fake) payment succeeds, so the app can unlock. */
+  onUnlock: () => void;
+}
 
 const LockGlyph = (
   <svg
@@ -88,20 +80,30 @@ const CloseGlyph = (
   </svg>
 );
 
-interface PaywallProps {
-  answer: number | null;
-  expression: string;
-  onClose: () => void;
-  onUnlock: () => void;
-}
-
-export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps) {
+export function Paywall({
+  tiers,
+  value,
+  line,
+  masked = "••••",
+  brand = "Pro",
+  receiptBrand = "PRO",
+  filename = "answer_encrypted.bin",
+  headline = "Your answer is ready.",
+  subline = "Your request completed successfully. The result has been encrypted and is awaiting release — a premium feature.",
+  checkoutNote = "Your answer is calculated and waiting. Enter payment details to release it.",
+  returnLabel = "Return",
+  dialogLabel = "Unlock your result",
+  onClose,
+  onUnlock,
+}: PaywallProps) {
   const [view, setView] = useState<View>("tiers");
-  const [tier, setTier] = useState<Tier | null>(null);
+  const [tier, setTier] = useState<PaywallTier | null>(null);
   const [processing, setProcessing] = useState(false);
   const [card, setCard] = useState<CardFields>({ name: "", number: "", expiry: "", cvc: "" });
   const [errors, setErrors] = useState<CardErrors>({});
-  const [receiptExpression, setReceiptExpression] = useState("");
+  /* Capture the locked line/value once on open — the app behind unlocks the
+     moment payment succeeds, which would otherwise blank these out. */
+  const [meta] = useState(() => ({ line: line ?? "", value }));
   const timers = useRef<number[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -109,10 +111,7 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
     return () => timers.current.forEach((t) => window.clearTimeout(t));
   }, []);
 
-  const answerText = answer != null ? formatNumber(answer) : "—";
-  const exprLine = expression.replace(/=\s*$/, "").trim();
-
-  const startCheckout = (t: Tier) => {
+  const startCheckout = (t: PaywallTier) => {
     setTier(t);
     setErrors({});
     setView("checkout");
@@ -133,13 +132,12 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
     timers.current.push(
       window.setTimeout(() => {
         setProcessing(false);
-        setReceiptExpression(exprLine);
         setView("downloading");
       }, 1900),
     );
   };
 
-  /* The answer is "downloaded" before it can be revealed. */
+  /* The result is "downloaded" before it can be revealed. */
   const finishDownload = () => {
     onUnlock();
     setView("receipt");
@@ -195,7 +193,7 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Unlock your answer"
+      aria-label={dialogLabel}
       className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-6"
       onKeyDown={onKeyDown}
     >
@@ -229,12 +227,22 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
         />
 
         {view === "tiers" && (
-          <TiersView exprLine={exprLine} onClose={onClose} onSelect={startCheckout} />
+          <TiersView
+            brand={brand}
+            line={meta.line}
+            masked={masked}
+            headline={headline}
+            subline={subline}
+            tiers={tiers}
+            onClose={onClose}
+            onSelect={startCheckout}
+          />
         )}
 
         {view === "checkout" && tier && (
           <CheckoutView
             tier={tier}
+            note={checkoutNote}
             processing={processing}
             card={card}
             errors={errors}
@@ -248,7 +256,8 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
 
         {view === "downloading" && (
           <DownloadingView
-            exprLine={receiptExpression}
+            line={meta.line}
+            filename={filename}
             onComplete={finishDownload}
             onClose={onClose}
           />
@@ -257,9 +266,11 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
         {view === "receipt" && tier && (
           <ReceiptView
             tier={tier}
-            answerText={answerText}
-            exprLine={receiptExpression}
+            receiptBrand={receiptBrand}
+            line={meta.line}
+            value={meta.value}
             cardNumber={card.number}
+            returnLabel={returnLabel}
             onClose={onClose}
           />
         )}
@@ -273,13 +284,23 @@ export function Paywall({ answer, expression, onClose, onUnlock }: PaywallProps)
 /* ------------------------------------------------------------------ */
 
 function TiersView({
-  exprLine,
+  brand,
+  line,
+  masked,
+  headline,
+  subline,
+  tiers,
   onClose,
   onSelect,
 }: {
-  exprLine: string;
+  brand: string;
+  line: string;
+  masked: string;
+  headline: string;
+  subline: string;
+  tiers: PaywallTier[];
   onClose: () => void;
-  onSelect: (t: Tier) => void;
+  onSelect: (t: PaywallTier) => void;
 }) {
   return (
     <div>
@@ -287,7 +308,7 @@ function TiersView({
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden />
-          Tally Pro
+          {brand}
         </span>
         <button
           type="button"
@@ -303,32 +324,27 @@ function TiersView({
       {/* copy */}
       <div className="mt-5">
         <h2 className="text-[26px] font-semibold tracking-[-0.02em] text-zinc-50 sm:text-[28px]">
-          Your answer is ready.
+          {headline}
         </h2>
-        <p className="mt-2 text-[13.5px] leading-relaxed text-zinc-400">
-          Your calculation completed successfully. The result has been
-          encrypted and is awaiting release — a premium feature.
-        </p>
+        <p className="mt-2 text-[13.5px] leading-relaxed text-zinc-400">{subline}</p>
       </div>
 
-      {/* locked answer preview — the answer itself is never shown */}
+      {/* locked result preview — the result itself is never shown */}
       <div className="mt-5 flex items-center justify-between gap-4 rounded-2xl border border-white/[0.07] bg-black/25 px-4 py-3.5">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-amber-400/30 bg-amber-400/15 text-amber-300">
             {LockGlyph}
           </span>
           <div className="min-w-0">
-            <p className="text-[13px] font-medium text-zinc-200">Answer locked</p>
-            <p className="truncate text-[11px] text-zinc-500">
-              {exprLine ? `${exprLine} =` : "Your calculation"}
-            </p>
+            <p className="text-[13px] font-medium text-zinc-200">Result locked</p>
+            <p className="truncate text-[11px] text-zinc-500">{line || "Your request"}</p>
           </div>
         </div>
         <span
           aria-hidden
           className="select-none whitespace-nowrap text-[22px] font-light tracking-[0.2em] text-zinc-400"
         >
-          ••••
+          {masked}
         </span>
       </div>
 
@@ -339,7 +355,7 @@ function TiersView({
         variants={{ show: { transition: { staggerChildren: 0.07, delayChildren: 0.14 } } }}
         className="mt-5 grid gap-2.5 sm:grid-cols-3 sm:gap-3"
       >
-        {TIERS.map((t) => (
+        {tiers.map((t) => (
           <TierCard key={t.id} tier={t} onSelect={() => onSelect(t)} />
         ))}
       </motion.div>
@@ -352,7 +368,7 @@ function TiersView({
   );
 }
 
-function TierCard({ tier, onSelect }: { tier: Tier; onSelect: () => void }) {
+function TierCard({ tier, onSelect }: { tier: PaywallTier; onSelect: () => void }) {
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -432,6 +448,7 @@ function TierCard({ tier, onSelect }: { tier: Tier; onSelect: () => void }) {
 
 function CheckoutView({
   tier,
+  note,
   processing,
   card,
   errors,
@@ -441,7 +458,8 @@ function CheckoutView({
   onSubmit,
   onEnterPay,
 }: {
-  tier: Tier;
+  tier: PaywallTier;
+  note: string;
   processing: boolean;
   card: CardFields;
   errors: CardErrors;
@@ -506,9 +524,7 @@ function CheckoutView({
       <h2 className="mt-5 text-[24px] font-semibold tracking-[-0.02em] text-zinc-50">
         Almost there.
       </h2>
-      <p className="mt-1.5 text-[13px] text-zinc-400">
-        Your answer is calculated and waiting. Enter payment details to release it.
-      </p>
+      <p className="mt-1.5 text-[13px] text-zinc-400">{note}</p>
 
       {/* order summary */}
       <div className="mt-4 flex items-center justify-between rounded-2xl border border-white/[0.07] bg-black/25 px-4 py-3">
@@ -550,7 +566,9 @@ function CheckoutView({
           <div className="relative">
             <input
               id="cc-number"
-              ref={(el) => { panelInputs.current.number = el; }}
+              ref={(el) => {
+                panelInputs.current.number = el;
+              }}
               autoComplete="cc-number"
               inputMode="numeric"
               placeholder="4242 4242 4242 4242"
@@ -577,7 +595,9 @@ function CheckoutView({
             </label>
             <input
               id="cc-exp"
-              ref={(el) => { panelInputs.current.expiry = el; }}
+              ref={(el) => {
+                panelInputs.current.expiry = el;
+              }}
               autoComplete="cc-exp"
               inputMode="numeric"
               placeholder="MM/YY"
@@ -595,7 +615,9 @@ function CheckoutView({
             </label>
             <input
               id="cc-cvc"
-              ref={(el) => { panelInputs.current.cvc = el; }}
+              ref={(el) => {
+                panelInputs.current.cvc = el;
+              }}
               autoComplete="cc-csc"
               inputMode="numeric"
               placeholder="123"
@@ -655,7 +677,7 @@ function CheckoutView({
         type="button"
         onClick={onBack}
         disabled={processing}
-        className="mt-3 text-[12px] font-medium text-zinc-500 transition-colors hover:text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 rounded"
+        className="mt-3 rounded text-[12px] font-medium text-zinc-500 transition-colors hover:text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
       >
         ← Back to plans
       </button>
@@ -664,7 +686,7 @@ function CheckoutView({
 }
 
 /* ------------------------------------------------------------------ */
-/* downloading — the answer is "transmitted" to the client            */
+/* downloading — the result is "transmitted" to the client            */
 /* ------------------------------------------------------------------ */
 
 const DownloadGlyph = (
@@ -684,11 +706,13 @@ const DownloadGlyph = (
 );
 
 function DownloadingView({
-  exprLine,
+  line,
+  filename,
   onComplete,
   onClose,
 }: {
-  exprLine: string;
+  line: string;
+  filename: string;
   onComplete: () => void;
   onClose: () => void;
 }) {
@@ -749,11 +773,11 @@ function DownloadingView({
       </span>
 
       <h2 className="mt-4 text-[22px] font-semibold tracking-[-0.02em] text-zinc-50">
-        Downloading your answer
+        Downloading your result
       </h2>
 
       <p className="mt-1.5 font-mono text-[11.5px] tabular-nums text-zinc-500">
-        {exprLine ? `${exprLine} =` : "calculation"} · answer_encrypted.bin · 512 B
+        {line || "request"} · {filename} · 512 B
       </p>
 
       {/* progress bar */}
@@ -783,15 +807,19 @@ function DownloadingView({
 
 function ReceiptView({
   tier,
-  answerText,
-  exprLine,
+  receiptBrand,
+  line,
+  value,
   cardNumber,
+  returnLabel,
   onClose,
 }: {
-  tier: Tier;
-  answerText: string;
-  exprLine: string;
+  tier: PaywallTier;
+  receiptBrand: string;
+  line: string;
+  value: string;
   cardNumber: string;
+  returnLabel: string;
   onClose: () => void;
 }) {
   const receiptNo = useRef(`#${String(Math.floor(1000 + Math.random() * 9000))}`).current;
@@ -830,7 +858,7 @@ function ReceiptView({
       {/* receipt */}
       <div className="mt-4 w-full max-w-[300px] rounded-2xl border border-white/[0.08] bg-black/25 px-4 py-3.5 text-left">
         <div className="flex items-center justify-between text-[11px] text-zinc-500">
-          <span>TALLY PRO</span>
+          <span>{receiptBrand}</span>
           <span>Receipt {receiptNo}</span>
         </div>
         <div className="mt-2.5 flex items-center justify-between">
@@ -848,26 +876,22 @@ function ReceiptView({
         </div>
       </div>
 
-      {/* the answer */}
-      {exprLine && (
-        <p className="mt-4 text-[13px] text-zinc-500">
-          {exprLine} =
-        </p>
-      )}
+      {/* the result */}
+      {line && <p className="mt-4 text-[13px] text-zinc-500">{line}</p>}
       <motion.p
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.12, duration: 0.45, ease: "easeOut" }}
         className="mt-1 text-[52px] font-light tabular-nums tracking-[-0.03em] text-zinc-50"
       >
-        {answerText}
+        {value}
       </motion.p>
 
       <p className="mt-4 max-w-[300px] text-[13px] leading-relaxed text-zinc-400">
         Our payment gateway is currently on a well-deserved coffee break.
       </p>
       <p className="mt-1.5 text-[12px] text-zinc-500">
-        Your answer has been unlocked anyway. That&rsquo;ll be {moneyFor(tier.price)}.
+        Your result has been unlocked anyway. That&rsquo;ll be {moneyFor(tier.price)}.
       </p>
 
       <button
@@ -876,7 +900,7 @@ function ReceiptView({
         onClick={onClose}
         className="mt-6 h-10 w-full max-w-[220px] rounded-xl bg-[linear-gradient(180deg,#ffb340,#ff9505)] text-[13px] font-semibold text-[#2a1800] transition-all duration-150 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:scale-[0.97]"
       >
-        Return to Tally
+        {returnLabel}
       </button>
     </motion.div>
   );

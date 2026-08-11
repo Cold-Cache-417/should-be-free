@@ -7,10 +7,40 @@ import {
   type CalcAction,
   type Digit,
 } from "../../lib/calcReducer";
-import { KEY_TO_OP } from "../../lib/calculator";
+import { KEY_TO_OP, formatNumber } from "../../lib/calculator";
 import { Display } from "./Display";
 import { Keypad } from "./Keypad";
-import { Paywall } from "../paywall/Paywall";
+import { Paywall, type PaywallTier } from "../paywall/Paywall";
+
+const CALC_TIERS: PaywallTier[] = [
+  {
+    id: "quick",
+    name: "Quick Answer",
+    price: "$20",
+    period: "one-time",
+    description: "Reveal the answer to your current calculation.",
+    badge: "For this answer only",
+    featured: true,
+    cta: "Unlock answer",
+  },
+  {
+    id: "monthly",
+    name: "Pro Monthly",
+    price: "$250",
+    period: "/month",
+    description: "Unlimited access to premium calculations.",
+    cta: "Start monthly",
+  },
+  {
+    id: "yearly",
+    name: "Pro Yearly",
+    price: "$2,000",
+    period: "/year",
+    description: "Unlimited premium calculations for an entire year.",
+    note: "Yes, I'm generous. I made it cheaper.",
+    cta: "Go yearly",
+  },
+];
 
 const OP_KEY_ID: Record<string, string> = {
   "+": "key-add",
@@ -138,8 +168,14 @@ export function Calculator() {
         {paywallVisible && (
           <Paywall
             key="paywall"
-            answer={state.answer}
-            expression={expressionText(state)}
+            tiers={CALC_TIERS}
+            value={state.answer != null ? formatNumber(state.answer) : "—"}
+            line={expressionText(state)}
+            brand="Calculator Pro"
+            receiptBrand="CALCULATOR PRO"
+            subline="Your calculation completed successfully. The result has been encrypted and is awaiting release — a premium feature."
+            returnLabel="Return to calculator"
+            dialogLabel="Unlock your answer"
             onClose={closePaywall}
             onUnlock={unlock}
           />

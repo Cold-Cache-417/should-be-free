@@ -1,59 +1,60 @@
-# Tally — The most beautiful calculator
+# Should Be Free
 
-A fully functional, premium-looking calculator whose only crime is charging
-**$20 to reveal the answer to 2 + 2**.
+**Normal apps. Absurd prices.**
 
-The calculator is real: full precedence arithmetic, decimals, percentage,
-sign toggle, keyboard input, error handling. The prank is that pressing `=`
-completes the calculation honestly — then locks the answer behind an
-absurdly convincing paywall.
+A collection of beautifully engineered everyday apps — fully functional, absurdly
+polished, and completely paywalled at the exact moment the result is ready.
 
-## The prank
+Every app here does one simple thing and charges you for the outcome.
 
-1. Type a completely normal calculation.
-2. Press `=`. The display blurs, "Calculating" pulses, the answer is computed
-   and then locked behind a blurred mask.
-3. A glassmorphic paywall springs in: *"Your answer is ready."*
-4. Quick Answer **$20** · Pro Monthly **$250/mo** · Pro Yearly **$2,000/yr**
-   *(Yes, I'm generous. I made it cheaper.)*
-5. Any purchase triggers the same response:
-   *"Payment infrastructure is currently experiencing a severe lack of
-   common sense."* — and unlocks the answer anyway.
+## Apps
 
-No payments are processed. No Stripe. No reality.
+| App | What it does | The joke |
+| --- | --- | --- |
+| **Calculator** | A real calculator: precedence, decimals, %, ±, keyboard input. | The answer costs $20. |
+| **Coin Flip** | A fair coin, a gorgeous 3D tumble. | The result costs $5. |
+| Weather | Today's forecast, free. | Tomorrow's forecast is premium. *(coming soon)* |
+| Word Counter | Counts your words. | The count is not free. *(coming soon)* |
 
-## Run it
+## The flow
+
+Every app shares the same machinery, tuned per-app:
+
+1. Use the app normally — it computes the result honestly in the background.
+2. The moment the result is ready, it is **locked**: masked dots, a "Result
+   locked" chip, and a glassmorphic paywall springs in.
+3. Pick a tier (Quick Answer / Pro Monthly / Pro Yearly — the yearly is always
+   "cheaper").
+4. **Secure Checkout**: type your name, card, expiry, CVC. All manual, all
+   validated, nothing leaves the browser.
+5. "Processing payment…" → **Downloading your result** (Encrypting →
+   Transmitting → Decrypting → Unlocking) with a progress bar.
+6. A receipt with a receipt number, the card's last 4, the result — and the
+   punchline: *"Our payment gateway is currently on a well-deserved coffee
+   break."*
+7. The result unlocks anyway. Then the next result costs you again.
+
+No real payments. No tracking. No refunds. Not even for your dignity.
+
+## Stack
+
+- React 19 + TypeScript + Vite
+- Tailwind CSS v4
+- `motion` for spring animation (with `prefers-reduced-motion` support)
+- Zero payment code — the checkout is a faithful mock
+
+## Dev
 
 ```bash
 npm install
-npm run dev        # dev server
-npm run test       # calculator engine + reducer unit tests
-npm run build      # production build (also emits a self-contained dist/index.html)
-npm run preview    # serve the production build
+npm run dev      # local dev server
+npm run test     # vitest (engine + reducer + coin + card)
+npm run build    # typecheck + production build → dist/
 ```
 
-## Tech
+## Deploy
 
-- React 19 + TypeScript + Vite
-- Tailwind CSS v4 design tokens
-- `motion` for spring-based animation (reduced-motion aware)
-- React Bits–style primitives written in-house: an ambient aurora
-  background, spring sheet/modal choreography, staggered entrances
-- Pure, tested calculator engine (`src/lib/calculator.ts`) with
-  shunting-yard precedence evaluation
-
-## Layout
-
-```
-src/
-  lib/
-    calculator.ts        # engine: tokenize, evaluate, format (pure)
-    calcReducer.ts       # UI state machine (typing → revealing → locked → unlocked)
-  components/
-    Aurora.tsx           # ambient background
-    calculator/          # Display, Keypad, Key, Calculator (orchestrator)
-    paywall/             # Paywall modal + pricing tiers + reveal panel
-    Footer.tsx
-```
+`vercel.json` is already configured (framework: vite, output: `dist`). Import
+the repo on Vercel and it just works — `should-be-free.vercel.app`.
 
 Made by @lxqmxn_24. DM me if you like this.
