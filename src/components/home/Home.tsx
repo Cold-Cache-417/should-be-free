@@ -72,21 +72,6 @@ const Apps: AppCardData[] = [
     ),
   },
   {
-    id: "privacy",
-    name: "Privacy Scanner",
-    description: "Opens with full disclosure: everything your browser reveals, shown to you. Deletion is free — the certificate is not.",
-    price: "Certificates from $15",
-    href: "#/privacy",
-    available: true,
-    icon: (
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6" />
-        <path d="M12 12v.01" />
-      </svg>
-    ),
-  },
-  {
     id: "weather",
     name: "Weather",
     description: "Today's forecast, free. Tomorrow's forecast, premium. The future costs money.",

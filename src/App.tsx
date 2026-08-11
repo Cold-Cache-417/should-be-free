@@ -6,7 +6,6 @@ import { Home } from "./components/home/Home";
 import { Calculator } from "./components/calculator/Calculator";
 import { CoinFlip } from "./components/coin/CoinFlip";
 import { Stopwatch } from "./components/stopwatch/Stopwatch";
-import { PrivacyScanner } from "./components/privacy/PrivacyScanner";
 import { useHashRoute } from "./lib/useHashRoute";
 
 const LogoMark = (
@@ -90,9 +89,7 @@ export default function App() {
         ? "flip"
         : route === "/stopwatch"
           ? "stopwatch"
-          : route === "/privacy"
-            ? "privacy"
-            : "home";
+          : "home";
 
   return (
     <MotionConfig reducedMotion="user">
@@ -123,12 +120,6 @@ export default function App() {
             <>
               <BackLink />
               <Stopwatch />
-            </>
-          )}
-          {page === "privacy" && (
-            <>
-              <BackLink />
-              <PrivacyScanner />
             </>
           )}
         </motion.main>
