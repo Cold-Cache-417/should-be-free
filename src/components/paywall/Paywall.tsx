@@ -47,7 +47,7 @@ interface PaywallProps {
   dialogLabel?: string;
   onClose: () => void;
   /** Called the moment the (fake) payment succeeds, so the app can unlock. */
-  onUnlock: () => void;
+  onUnlock: (tier: PaywallTier) => void;
 }
 
 const LockGlyph = (
@@ -139,7 +139,7 @@ export function Paywall({
 
   /* The result is "downloaded" before it can be revealed. */
   const finishDownload = () => {
-    onUnlock();
+    if (tier) onUnlock(tier);
     setView("receipt");
   };
 
@@ -729,20 +729,31 @@ function DownloadingView({
     const duration = reduced ? 500 : 2000;
     const start = performance.now();
     let raf = 0;
+    let interval: number | undefined;
 
-    const tick = (now: number) => {
-      const p = Math.min(100, ((now - start) / duration) * 100);
+    /* Advance by wall-clock elapsed time. rAF drives the smooth updates;
+       the interval is a safety net so a clamped/throttled rAF (background
+       tab, heavy load) can never freeze the download forever. */
+    const advance = () => {
+      const p = Math.min(100, ((performance.now() - start) / duration) * 100);
       setProgress(p);
-      if (p >= 100) {
+      if (p >= 100 && holdTimer.current === null) {
         holdTimer.current = window.setTimeout(() => completeRef.current(), 500);
-        return;
       }
-      raf = requestAnimationFrame(tick);
+      return p >= 100;
+    };
+
+    const tick = () => {
+      if (advance()) cancelAnimationFrame(raf);
     };
     raf = requestAnimationFrame(tick);
+    interval = window.setInterval(() => {
+      if (advance()) window.clearInterval(interval);
+    }, 250);
 
     return () => {
       cancelAnimationFrame(raf);
+      if (interval !== undefined) window.clearInterval(interval);
       if (holdTimer.current) window.clearTimeout(holdTimer.current);
     };
   }, []);

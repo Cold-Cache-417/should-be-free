@@ -344,6 +344,8 @@ body {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   overflow: hidden;
+  /* dark rim showing at the very edge of the engraved disc */
+  background: #7a4a00;
 }
 
 .coin__face--front {
@@ -352,88 +354,6 @@ body {
 
 .coin__face--back {
   transform: rotateY(180deg);
-}
-
-.coin__disc {
-  position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  display: grid;
-  place-items: center;
-}
-
-.coin__disc--gold {
-  background:
-    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.55), transparent 44%),
-    linear-gradient(155deg, #ffd98a 0%, #f5a623 34%, #c97f0a 68%, #9a5c00 100%);
-  box-shadow:
-    inset 0 2px 6px rgba(255, 255, 255, 0.5),
-    inset 0 -8px 16px rgba(90, 50, 0, 0.5),
-    0 18px 40px -12px rgba(0, 0, 0, 0.7);
-}
-
-.coin__disc--silver {
-  background:
-    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.85), transparent 46%),
-    linear-gradient(155deg, #f4f4f6 0%, #cbcbd2 36%, #9c9ca6 70%, #6f6f7a 100%);
-  box-shadow:
-    inset 0 2px 6px rgba(255, 255, 255, 0.6),
-    inset 0 -8px 16px rgba(40, 40, 50, 0.5),
-    0 18px 40px -12px rgba(0, 0, 0, 0.7);
-}
-
-.coin__disc::after {
-  content: "";
-  position: absolute;
-  inset: 9%;
-  border-radius: 9999px;
-  border: 2px solid rgba(120, 70, 0, 0.3);
-}
-
-.coin__disc--silver::after {
-  border-color: rgba(60, 60, 70, 0.3);
-}
-
-.coin__label {
-  position: absolute;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-indent: 0.2em;
-  color: #7a4b00;
-}
-
-.coin__disc--silver .coin__label {
-  color: #56565f;
-}
-
-.coin__label--top {
-  top: 19%;
-}
-
-.coin__label--bottom {
-  bottom: 19%;
-}
-
-.coin__mark {
-  font-size: 60px;
-  font-weight: 800;
-  line-height: 1;
-  color: #5b3400;
-  margin-top: 4px;
-}
-
-.coin__mark--small {
-  font-size: 42px;
-  letter-spacing: -0.03em;
-  color: #3f3f46;
-}
-
-.coin__disc--silver .coin__mark {
-  color: #3f3f46;
 }
 
 .coin__locked {

@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { flipCoin, faceLabel, type CoinFace } from "../../lib/coin";
 import { Paywall, type PaywallTier } from "../paywall/Paywall";
+import { cn } from "../../lib/cn";
 import { Coin, type CoinPhase } from "./Coin";
 
-const FLIP_TIERS: PaywallTier[] = [
+/** The $5 reveal — for fair AND rigged flips alike. */
+const REVEAL_TIERS: PaywallTier[] = [
   {
     id: "quick",
     name: "Quick Answer",
@@ -33,6 +35,44 @@ const FLIP_TIERS: PaywallTier[] = [
     cta: "Go yearly",
   },
 ];
+
+/** The rig — guarantee the outcome. */
+const RIG_TIERS: PaywallTier[] = [
+  {
+    id: "rig-flip",
+    name: "Rig One Flip",
+    price: "$25",
+    period: "one-time",
+    description: "Guarantee the outcome of your next flip.",
+    badge: "For one flip",
+    featured: true,
+    cta: "Rig my flip",
+  },
+  {
+    id: "rig-monthly",
+    name: "Rig Monthly",
+    price: "$700",
+    period: "/month",
+    description: "Unlimited rigged flips.",
+    cta: "Rig monthly",
+  },
+  {
+    id: "rig-yearly",
+    name: "Rig Yearly",
+    price: "$2,500",
+    period: "/year",
+    description: "A whole year of rigged flips.",
+    note: "Yes, it's cheaper.",
+    cta: "Rig yearly",
+  },
+];
+
+type RigTier = "per-flip" | "monthly" | "yearly";
+
+interface RigState {
+  tier: RigTier;
+  unlimited: boolean;
+}
 
 const LockIcon = (
   <svg
@@ -65,11 +105,33 @@ const CheckIcon = (
   </svg>
 );
 
+const DiceIcon = (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="h-4 w-4"
+    aria-hidden
+  >
+    <rect x="4.5" y="4.5" width="15" height="15" rx="3.5" />
+    <circle cx="9" cy="9" r="1.1" fill="currentColor" stroke="none" />
+    <circle cx="15" cy="15" r="1.1" fill="currentColor" stroke="none" />
+    <circle cx="15" cy="9" r="1.1" fill="currentColor" stroke="none" />
+    <circle cx="9" cy="15" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 export function CoinFlip() {
   const [phase, setPhase] = useState<CoinPhase>("idle");
   const [result, setResult] = useState<CoinFace | null>(null);
   const [flipCount, setFlipCount] = useState(0);
-  const [paywallVisible, setPaywallVisible] = useState(false);
+  const [paywall, setPaywall] = useState<null | "result" | "rig">(null);
+  const [rig, setRig] = useState<RigState | null>(null);
+  const [chosenSide, setChosenSide] = useState<CoinFace | null>(null);
+  const [lastFlipRigged, setLastFlipRigged] = useState(false);
   const timers = useRef<number[]>([]);
   const reduced = useRef(false);
 
@@ -80,28 +142,51 @@ export function CoinFlip() {
 
   const startFlip = () => {
     if (phase === "flipping" || phase === "locked") return;
-    setResult(flipCoin());
+
+    const isRigged = rig != null && chosenSide != null;
+    const face = isRigged ? chosenSide : flipCoin();
+    setResult(face);
     setFlipCount((n) => n + 1);
+    setLastFlipRigged(isRigged);
+    setChosenSide(null);
     setPhase("flipping");
+
+    // A per-flip rig is consumed the moment the flip is thrown.
+    if (isRigged && rig && !rig.unlimited) setRig(null);
 
     /* The coin settles, then the result is locked and the paywall springs
        in — the face is never shown before payment. */
     timers.current.push(
       window.setTimeout(() => {
         setPhase("locked");
-        timers.current.push(window.setTimeout(() => setPaywallVisible(true), 0));
+        timers.current.push(window.setTimeout(() => setPaywall("result"), 0));
       }, reduced.current ? 320 : 1900),
     );
   };
 
   const closePaywall = useCallback(() => {
-    setPaywallVisible(false);
+    setPaywall(null);
     // Closing without paying resets the coin; after payment the result stays.
     setPhase((p) => (p === "locked" ? "idle" : p));
     window.setTimeout(() => document.getElementById("flip-btn")?.focus(), 80);
   }, []);
 
-  const unlock = useCallback(() => setPhase("unlocked"), []);
+  const unlockResult = useCallback(() => setPhase("unlocked"), []);
+
+  const unlockRig = useCallback((tier: PaywallTier) => {
+    if (tier.id === "rig-flip") setRig({ tier: "per-flip", unlimited: false });
+    else setRig({ tier: tier.id === "rig-monthly" ? "monthly" : "yearly", unlimited: true });
+  }, []);
+
+  const openRig = () => {
+    if (paywall !== null) return;
+    setPaywall("rig");
+  };
+
+  const flipping = phase === "flipping";
+  const locked = phase === "locked";
+  const rigged = rig != null;
+  const flipDisabled = flipping || locked || (rigged && chosenSide == null);
 
   const mainText =
     phase === "locked"
@@ -111,6 +196,20 @@ export function CoinFlip() {
         : phase === "flipping"
           ? "Flipping…"
           : "Ready";
+
+  const flipLabel = flipping
+    ? "Flipping…"
+    : locked
+      ? "Result locked"
+      : phase === "unlocked"
+        ? rigged
+          ? "Flip again — $25"
+          : "Flip again — $5"
+        : rigged && chosenSide == null
+          ? "Choose a side to flip"
+          : rigged && chosenSide
+            ? `Flip rigged — ${faceLabel(chosenSide)}`
+            : "Flip the coin";
 
   return (
     <>
@@ -144,7 +243,13 @@ export function CoinFlip() {
               <span className="min-w-0 truncate text-[12.5px] font-medium tracking-wide text-zinc-500">
                 {flipCount > 0 ? `Flip #${flipCount}` : "Your flip"}
               </span>
-              {phase === "locked" && (
+              {rigged && (
+                <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-rose-400/30 bg-rose-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-rose-300">
+                  {DiceIcon}
+                  Rig active
+                </span>
+              )}
+              {locked && (
                 <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-300">
                   {LockIcon}
                   Result locked
@@ -164,14 +269,15 @@ export function CoinFlip() {
                 initial={{ opacity: 0.35, y: 0 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18, ease: "easeOut" }}
-                aria-hidden={phase === "locked"}
-                className={`whitespace-nowrap text-[30px] font-light tabular-nums tracking-[-0.02em] leading-none ${
-                  phase === "locked"
-                    ? "select-none text-amber-300/80 tracking-[0.2em]"
+                aria-hidden={locked}
+                className={cn(
+                  "whitespace-nowrap text-[30px] font-light tabular-nums leading-none",
+                  locked
+                    ? "select-none tracking-[0.2em] text-amber-300/80"
                     : phase === "unlocked"
-                      ? "text-zinc-100"
-                      : "text-zinc-400"
-                }`}
+                      ? "text-zinc-100 tracking-[-0.02em]"
+                      : "text-zinc-400 tracking-[-0.02em]",
+                )}
               >
                 {mainText}
               </motion.span>
@@ -181,6 +287,9 @@ export function CoinFlip() {
           {/* the coin */}
           <div className="px-4 pb-4 pt-6 sm:pt-8">
             <Coin phase={phase} result={result} flipCount={flipCount} reduced={reduced.current} />
+            <p className="mt-3 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+              Heads — Epstein <span aria-hidden className="mx-1 text-zinc-700">·</span> Tails — Diddy
+            </p>
             <motion.div
               aria-hidden
               animate={
@@ -189,62 +298,109 @@ export function CoinFlip() {
                   : { scaleX: 1, opacity: 0.5 }
               }
               transition={{ duration: 1.9, times: [0, 0.35, 0.62, 1], ease: "easeInOut" }}
-              className="mx-auto mt-4 h-4 w-2/3 rounded-full bg-black/70 blur-[10px]"
+              className="mx-auto mt-3 h-4 w-2/3 rounded-full bg-black/70 blur-[10px]"
             />
           </div>
 
           {/* action */}
           <div className="px-1.5 pb-2">
+            {rigged && (
+              <div className="mb-3 rounded-2xl border border-rose-400/20 bg-rose-400/[0.05] p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-rose-300">
+                    Rig the outcome
+                  </span>
+                  <span className="text-[10px] text-zinc-500">
+                    {rig?.unlimited ? "Unlimited rigs" : "1 rig left"}
+                  </span>
+                </div>
+                <div className="mt-2.5 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setChosenSide("heads")}
+                    aria-pressed={chosenSide === "heads"}
+                    className={cn(
+                      "h-10 rounded-xl border text-[12px] font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60 active:scale-[0.97]",
+                      chosenSide === "heads"
+                        ? "border-rose-400/50 bg-rose-400/15 text-rose-100"
+                        : "border-white/[0.09] bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]",
+                    )}
+                  >
+                    Heads — Epstein
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChosenSide("tails")}
+                    aria-pressed={chosenSide === "tails"}
+                    className={cn(
+                      "h-10 rounded-xl border text-[12px] font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60 active:scale-[0.97]",
+                      chosenSide === "tails"
+                        ? "border-rose-400/50 bg-rose-400/15 text-rose-100"
+                        : "border-white/[0.09] bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]",
+                    )}
+                  >
+                    Tails — Diddy
+                  </button>
+                </div>
+              </div>
+            )}
+
             <button
               id="flip-btn"
               type="button"
               onClick={startFlip}
-              disabled={phase === "flipping" || phase === "locked"}
+              disabled={flipDisabled}
               className="flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 disabled:cursor-default disabled:opacity-60 active:scale-[0.98]"
               style={{
                 background:
-                  phase === "locked"
+                  locked
                     ? "linear-gradient(180deg,#5a5a62,#3d3d44)"
-                    : "linear-gradient(180deg,#ffb340,#ff9505)",
-                color: phase === "locked" ? "#d4d4d8" : "#2a1800",
+                    : rigged
+                      ? "linear-gradient(180deg,#ff6b6b,#e11d48)"
+                      : "linear-gradient(180deg,#ffb340,#ff9505)",
+                color: locked ? "#d4d4d8" : "#2a1800",
                 boxShadow:
-                  phase === "locked"
+                  locked
                     ? "none"
-                    : "0 4px 20px -6px rgba(255,149,5,0.65), inset 0 1px 0 rgba(255,255,255,0.35)",
+                    : rigged
+                      ? "0 4px 20px -6px rgba(225,29,72,0.55), inset 0 1px 0 rgba(255,255,255,0.3)"
+                      : "0 4px 20px -6px rgba(255,149,5,0.65), inset 0 1px 0 rgba(255,255,255,0.35)",
               }}
             >
-              {phase === "flipping" ? (
+              {flipping ? (
                 <>
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   Flipping…
                 </>
-              ) : phase === "locked" ? (
-                "Result locked"
-              ) : phase === "unlocked" ? (
-                "Flip again — $5"
               ) : (
-                <>
-                  Flip the coin
-                  <span aria-hidden className="text-[13px] opacity-70">
-                    ⏤
-                  </span>
-                </>
+                flipLabel
               )}
             </button>
             <p className="mt-3 text-center text-[11px] text-zinc-600">
-              Fair odds: 50/50. Fair price: $5.
+              Fair odds: 50/50 · Fair price: $5.
             </p>
+
+            {!rigged && (
+              <button
+                type="button"
+                onClick={openRig}
+                className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-400/25 bg-rose-400/[0.06] text-[12.5px] font-semibold text-rose-300 transition-all duration-150 hover:bg-rose-400/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60 active:scale-[0.98]"
+              >
+                {DiceIcon}
+                Pay to rig it — $25 per flip
+              </button>
+            )}
           </div>
         </div>
       </motion.section>
 
       <AnimatePresence>
-        {paywallVisible && (
+        {paywall === "result" && (
           <Paywall
             key="coin-paywall"
-            tiers={FLIP_TIERS}
+            tiers={REVEAL_TIERS}
             value={result ? faceLabel(result) : ""}
-            line={`Flip #${flipCount}`}
+            line={`Flip #${flipCount}${lastFlipRigged ? " · rigged" : ""}`}
             masked="••••"
             brand="Flip Pro"
             receiptBrand="FLIP PRO"
@@ -255,7 +411,27 @@ export function CoinFlip() {
             returnLabel="Return to the flip"
             dialogLabel="Unlock your flip result"
             onClose={closePaywall}
-            onUnlock={unlock}
+            onUnlock={unlockResult}
+          />
+        )}
+
+        {paywall === "rig" && (
+          <Paywall
+            key="rig-paywall"
+            tiers={RIG_TIERS}
+            value="RIGGED"
+            line="Rig your next flip"
+            masked="••••"
+            brand="Rig Service"
+            receiptBrand="RIG SERVICE"
+            filename="rig_token.bin"
+            headline="Your rig is ready."
+            subline="Your request to influence a fair coin has been approved. The rig has been encrypted and is awaiting release — a premium feature."
+            checkoutNote="Your rig is ready to deploy. Enter payment details to activate it."
+            returnLabel="Return to the flip"
+            dialogLabel="Rig your flip"
+            onClose={closePaywall}
+            onUnlock={unlockRig}
           />
         )}
       </AnimatePresence>
