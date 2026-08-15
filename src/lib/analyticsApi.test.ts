@@ -27,6 +27,17 @@ class FakeUpstash {
         result = v;
         break;
       }
+      case "incrby": {
+        const v = ((this.store.get(key) as number) ?? 0) + Number(rest[0]);
+        this.store.set(key, v);
+        result = v;
+        break;
+      }
+      case "setex": {
+        this.store.set(key, rest[1]);
+        result = "OK";
+        break;
+      }
       case "hincrby": {
         const arr = (this.store.get(key) as string[]) ?? [];
         const idx = arr.indexOf(rest[0]);
@@ -163,6 +174,46 @@ describe("POST /api/analytics", () => {
     expect(fake.store.get("sbf:total")).toBe(1); // app events are not visits
   });
 
+  it("records OS, device model, hour-of-day and weekday counters", async () => {
+    await post(JSON.stringify({ type: "visit" }), {
+      "user-agent": "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+      "sec-ch-ua-mobile": "?1",
+    });
+    expect(fake.store.get("sbf:os")).toEqual(["Android", "1"]);
+    expect(fake.store.get("sbf:models")).toEqual(["Pixel 8", "1"]);
+    expect(fake.store.get("sbf:hoursOfDay")).toEqual([String(new Date().getUTCHours()), "1"]);
+    expect(fake.store.get("sbf:weekdays")).toEqual([String(new Date().getUTCDay()), "1"]);
+    const recent = fake.store.get("sbf:recent") as string[];
+    const entry = JSON.parse(recent[0]) as Record<string, unknown>;
+    expect(entry.o).toBe("Android");
+    expect(entry.m).toBe("Pixel 8");
+  });
+
+  it("counts fake purchases and engaged time per app", async () => {
+    await post(JSON.stringify({ type: "pay", app: "flip" }));
+    await post(JSON.stringify({ type: "time", app: "weather", ms: 45000 }));
+    expect(fake.store.get("sbf:paywalls")).toEqual(["flip", "1"]);
+    expect(fake.store.get("sbf:timeSum")).toEqual(["weather", "45000"]);
+    expect(fake.store.get("sbf:timeCount")).toEqual(["weather", "1"]);
+  });
+
+  it("buckets visits into server-side sessions without storing identifiers", async () => {
+    const hdrs = { "x-forwarded-for": "203.0.113.7" };
+    await post(JSON.stringify({ type: "visit" }), hdrs);
+    await post(JSON.stringify({ type: "app", app: "hack" }), hdrs);
+    expect(fake.store.get("sbf:sessions")).toBe(1);
+    expect(fake.store.get("sbf:multiPage")).toBe(1); // second page event
+    expect(typeof fake.store.get("sbf:sessDur")).toBe("number");
+    expect([...fake.store.keys()].some((k) => k.startsWith("sbf:sess:"))).toBe(true);
+  });
+
+  it("excludes bots from human counters and counts messenger previews as shares", async () => {
+    await post(JSON.stringify({ type: "visit" }), { "user-agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" });
+    await post(JSON.stringify({ type: "visit" }), { "user-agent": "WhatsApp/2.23.20.0 (Windows NT 10.0; Win64; x64)" });
+    expect(fake.store.get("sbf:total")).toBeUndefined();
+    expect(fake.store.get("sbf:shares")).toEqual(["search", "1", "messenger", "1"]);
+  });
+
   it("derives mobile device from UA and client hint", async () => {
     await post(JSON.stringify({ type: "visit" }), {
       "user-agent": IPHONE_UA,
@@ -214,6 +265,13 @@ describe("GET /api/analytics", () => {
       devices: Record<string, number>;
       screens: Record<string, number>;
       langs: Record<string, number>;
+      os: Record<string, number>;
+      hoursOfDay: Record<string, number>;
+      weekdays: Record<string, number>;
+      paywalls: Record<string, number>;
+      shares: Record<string, number>;
+      sessions: number;
+      sessDur: number;
       recent: { t: number; a?: string }[];
       firstSeen: number | null;
     };
@@ -231,5 +289,12 @@ describe("GET /api/analytics", () => {
     expect(j.recent).toHaveLength(2);
     expect(j.recent[0].a).toBe("weather");
     expect(typeof j.firstSeen).toBe("number");
+    expect(j.os).toEqual({ macOS: 2 });
+    expect(j.hoursOfDay).toHaveProperty(String(new Date().getUTCHours()));
+    expect(j.weekdays).toHaveProperty(String(new Date().getUTCDay()));
+    expect(j.sessions).toBe(1); // both posts share the default anon bucket
+    expect(typeof j.sessDur).toBe("number");
+    expect(j.shares).toEqual({});
+    expect(j.paywalls).toEqual({});
   });
 });

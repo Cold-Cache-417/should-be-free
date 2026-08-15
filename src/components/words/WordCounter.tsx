@@ -203,6 +203,7 @@ export function WordCounter() {
             checkoutNote="Your count has been computed and is waiting. Enter payment details to release it."
             returnLabel="Back to my words"
             dialogLabel="Unlock your word count"
+            product="words"
             onClose={() => setPaywallVisible(false)}
             onUnlock={() => setUnlocked(true)}
           />

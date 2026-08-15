@@ -414,6 +414,7 @@ export function CoinFlip() {
             checkoutNote="Your flip is complete. Enter payment details to release the result."
             returnLabel="Return to the flip"
             dialogLabel="Unlock your flip result"
+            product="flip"
             onClose={closePaywall}
             onUnlock={unlockResult}
           />
@@ -434,6 +435,7 @@ export function CoinFlip() {
             checkoutNote="Your rig is ready to deploy. Enter payment details to activate it."
             returnLabel="Return to the flip"
             dialogLabel="Rig your flip"
+            product="flip"
             onClose={closePaywall}
             onUnlock={unlockRig}
           />

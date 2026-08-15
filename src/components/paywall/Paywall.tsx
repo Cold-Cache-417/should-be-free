@@ -11,6 +11,7 @@ import {
   type CardFields,
 } from "../../lib/card";
 import { cn } from "../../lib/cn";
+import { reportPaywall } from "../../lib/remoteAnalytics";
 
 type View = "tiers" | "checkout" | "downloading" | "receipt";
 
@@ -45,6 +46,8 @@ interface PaywallProps {
   checkoutNote?: string;
   returnLabel?: string;
   dialogLabel?: string;
+  /** App id reported with the (anonymous) fake-purchase counter. */
+  product?: string;
   onClose: () => void;
   /** Called the moment the (fake) payment succeeds, so the app can unlock. */
   onUnlock: (tier: PaywallTier) => void;
@@ -93,6 +96,7 @@ export function Paywall({
   checkoutNote = "Your answer is calculated and waiting. Enter payment details to release it.",
   returnLabel = "Return",
   dialogLabel = "Unlock your result",
+  product,
   onClose,
   onUnlock,
 }: PaywallProps) {
@@ -146,6 +150,7 @@ export function Paywall({
   /* The result is "downloaded" before it can be revealed. */
   const finishDownload = () => {
     if (tier) onUnlock(tier);
+    if (product) reportPaywall(product);
     setView("receipt");
   };
 

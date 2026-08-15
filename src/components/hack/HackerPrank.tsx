@@ -639,6 +639,7 @@ export function HackerPrank() {
             checkoutNote="Deleting data that was never stored, at a premium price. Enter payment details to proceed."
             returnLabel="Back to my device"
             dialogLabel="Remove your data"
+            product="hack"
             onClose={() => setPaywallVisible(false)}
             onUnlock={() => setDeleted(true)}
           />

@@ -11,7 +11,7 @@ import { WordCounter } from "./components/words/WordCounter";
 import { HackerPrank } from "./components/hack/HackerPrank";
 import { AdminPage } from "./components/admin/AdminPage";
 import { ANALYTICS_KEY, loadAnalytics, saveAnalytics, withApp, withVisit } from "./lib/analytics";
-import { reportAnalytics } from "./lib/remoteAnalytics";
+import { reportAnalytics, reportTime } from "./lib/remoteAnalytics";
 import { useHashRoute } from "./lib/useHashRoute";
 
 const LogoMark = (
@@ -86,6 +86,8 @@ export default function App() {
   const visitedRef = useRef(false);
   const lastAppRef = useRef<string | null>(null);
   const adminBuf = useRef("");
+  const lastPageRef = useRef<string | null>(null);
+  const pageStartedRef = useRef<number>(Date.now());
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -131,6 +133,28 @@ export default function App() {
     lastAppRef.current = page;
     saveAnalytics(withApp(loadAnalytics(store), page), store);
     reportAnalytics("app", page);
+  }, [page]);
+
+  /* Engaged time per page: report the previous page's dwell on route
+     change, and the current page's dwell when the tab is closed. */
+  useEffect(() => {
+    if (page === "admin") return;
+    const prev = lastPageRef.current;
+    if (prev && prev !== page) {
+      reportTime(prev, Date.now() - pageStartedRef.current);
+    }
+    lastPageRef.current = page;
+    pageStartedRef.current = Date.now();
+  }, [page]);
+
+  useEffect(() => {
+    const onHide = () => {
+      if (page !== "admin" && lastPageRef.current) {
+        reportTime(lastPageRef.current, Date.now() - pageStartedRef.current);
+      }
+    };
+    window.addEventListener("pagehide", onHide);
+    return () => window.removeEventListener("pagehide", onHide);
   }, [page]);
 
   /* Type "admin" anywhere to go to the admin console. */

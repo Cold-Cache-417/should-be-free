@@ -400,6 +400,7 @@ export function Weather() {
             checkoutNote="The degrees are live and waiting. Enter payment details to see today's temperature."
             returnLabel="Back to the forecast"
             dialogLabel="Unlock today's temperature"
+            product="weather"
             onClose={() => setPaywall(null)}
             onUnlock={() => setTempUnlocked(true)}
           />
@@ -419,6 +420,7 @@ export function Weather() {
             checkoutNote="The stats are computed and waiting. Enter payment details to see today's conditions."
             returnLabel="Back to the forecast"
             dialogLabel="Unlock today's conditions"
+            product="weather"
             onClose={() => setPaywall(null)}
             onUnlock={() => setConditionsUnlocked(true)}
           />
@@ -438,6 +440,7 @@ export function Weather() {
             checkoutNote="The specifics are computed and waiting. Enter payment details to see the details."
             returnLabel="Back to the forecast"
             dialogLabel="Unlock forecast details"
+            product="weather"
             onClose={() => setPaywall(null)}
             onUnlock={() => setDetailsUnlocked(true)}
           />

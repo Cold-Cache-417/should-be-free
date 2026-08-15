@@ -56,10 +56,16 @@ npm run build    # typecheck + production build → dist/
 
 ## Admin analytics
 
-Type **`admin`** anywhere on the site to open the dashboard — total visits,
-per-app usage, 14-day / 24-hour series, countries, browsers, devices,
-referrers, and recent visits. All anonymous aggregates: no names, no
-fingerprints, no per-visitor profiles.
+Type **`admin`** anywhere on the site (or open `/#/admin`) for the full
+console — total visits, sessions, engaged time, pages per session, per-app
+usage and fake paywall purchases, 14-day / 24-hour / weekday / hour-of-day
+series, countries, browsers, devices, OS families, device models, referrers,
+screens, languages, sharing signals, and a searchable recent-visits table.
+All anonymous aggregates: no names, no fingerprints, no per-visitor profiles.
+Sessions are bucketed server-side from a transient hash of IP + UA with a
+30-minute inactivity window — no identifiers stored or exposed. Bots and
+crawlers are excluded from every human counter; messenger link previews
+(WhatsApp / Telegram) are counted separately as a sharing signal.
 
 The dashboard reads from a serverless API (`api/analytics.ts`) backed by
 Upstash Redis. To turn it on:

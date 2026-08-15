@@ -176,6 +176,7 @@ export function Calculator() {
             subline="Your calculation completed successfully. The result has been encrypted and is awaiting release — a premium feature."
             returnLabel="Return to calculator"
             dialogLabel="Unlock your answer"
+            product="calculator"
             onClose={closePaywall}
             onUnlock={unlock}
           />

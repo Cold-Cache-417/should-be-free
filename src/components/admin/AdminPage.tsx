@@ -4,6 +4,8 @@ import { fetchGlobalAnalytics, type GlobalAnalytics } from "../../lib/remoteAnal
 import { ANALYTICS_KEY, formatFirstSeen, formatTime, loadAnalytics, type Analytics } from "../../lib/analytics";
 import { dayKey, hourKey, type RecentEntry } from "../../lib/analyticsServer";
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 const APP_LABELS: Record<string, string> = {
   home: "Home",
   calculator: "Calculator",
@@ -311,6 +313,35 @@ export function AdminPage() {
     ? Object.values(global.apps).reduce((s, n) => s + n, 0)
     : Object.values(local.appCounts).reduce((s, n) => s + n, 0);
 
+  /* sessions + engagement (server-side bucketing, no identifiers) */
+  const sessions = global?.sessions ?? null;
+  const fmtDur = (ms: number) => {
+    if (!Number.isFinite(ms) || ms <= 0) return "—";
+    const s = Math.round(ms / 1000);
+    if (s < 60) return `${s}s`;
+    return `${Math.floor(s / 60)}m ${s % 60}s`;
+  };
+  const avgEngaged = sessions ? fmtDur((global?.sessDur ?? 0) / sessions) : "—";
+  const pagesPerSession = sessions ? (total / sessions).toFixed(1) : "—";
+  const singlePage =
+    sessions && global
+      ? `${Math.round((Math.max(0, sessions - global.multiPage) / sessions) * 100)}%`
+      : "—";
+  /* per-app avg engaged time (minutes), from timeSum / timeCount */
+  const timePerApp = useMemo(() => {
+    if (!global) return [];
+    return Object.entries(global.timeCount)
+      .map(([app, n]) => [APP_LABELS[app] ?? app, Math.round(((global.timeSum[app] ?? 0) / n / 60000) * 10) / 10] as [string, number])
+      .filter(([, m]) => m > 0)
+      .sort((a, b) => b[1] - a[1]);
+  }, [global]);
+
+  const weekdayData = WEEKDAYS.map((w, i) => ({ label: w, count: global?.weekdays[String(i)] ?? 0 }));
+  const hourData = Array.from({ length: 24 }, (_, h) => ({
+    label: `${h}h`,
+    count: global?.hoursOfDay[String(h)] ?? 0,
+  }));
+
   const appEntries = (global ? Object.entries(global.apps) : Object.entries(local.appCounts)).sort(
     (a, b) => b[1] - a[1],
   );
@@ -341,6 +372,8 @@ export function AdminPage() {
           countryName(e.c ?? ""),
           e.b ?? "",
           e.d ?? "",
+          e.o ?? "",
+          e.m ?? "",
           e.s ?? "",
           e.l ?? "",
           e.r ?? "",
@@ -438,7 +471,7 @@ export function AdminPage() {
 
       <main className="mx-auto max-w-[1180px] px-5 pb-16 pt-6">
         {/* headline stats */}
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-8">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-12">
           <Stat label="Total visits" value={total} accent />
           <Stat label="Today" value={today} />
           <Stat label="Yesterday" value={yesterday} />
@@ -447,6 +480,10 @@ export function AdminPage() {
           <Stat label="Best day" value={bestDay ? bestDay.count : "—"} />
           <Stat label="Peak hour" value={peakHour ? `${peakHour.hour.slice(11)}:00` : "—"} />
           <Stat label="First seen" value={formatFirstSeen(global?.firstSeen ?? local.firstSeen)} />
+          <Stat label="Sessions" value={sessions ?? "—"} accent />
+          <Stat label="Avg engaged" value={avgEngaged} />
+          <Stat label="Pages / session" value={pagesPerSession} />
+          <Stat label="Single-page" value={singlePage} />
         </div>
 
         {/* time series */}
@@ -500,6 +537,44 @@ export function AdminPage() {
           </Panel>
         </div>
 
+        {/* device intelligence */}
+        <div className="mt-3 grid grid-cols-2 gap-2.5 lg:grid-cols-3">
+          <Panel>
+            <SectionLabel>Operating systems</SectionLabel>
+            <BarList data={top(global?.os)} />
+          </Panel>
+          <Panel>
+            <SectionLabel>Device models (UA-revealed)</SectionLabel>
+            <BarList data={top(global?.models)} />
+          </Panel>
+          <Panel>
+            <SectionLabel>Paywall purchases (fake)</SectionLabel>
+            <BarList
+              data={(global ? Object.entries(global.paywalls).sort((a, b) => b[1] - a[1]) : []).map(([a, n]) => [
+                APP_LABELS[a] ?? a,
+                n,
+              ])}
+            />
+          </Panel>
+          <Panel>
+            <SectionLabel>Avg time per app (minutes)</SectionLabel>
+            <BarList data={timePerApp} />
+          </Panel>
+          <Panel>
+            <SectionLabel>Link previews · sharing signal</SectionLabel>
+            <BarList data={top(global?.shares)} />
+          </Panel>
+          <Panel>
+            <SectionLabel>Peak hours (UTC)</SectionLabel>
+            <BarList
+              data={Object.entries(global?.hoursOfDay ?? {})
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 6)
+                .map(([h, n]) => [`${h}:00 UTC`, n])}
+            />
+          </Panel>
+        </div>
+
         {/* dimensions */}
         <div className="mt-3 grid grid-cols-2 gap-2.5 lg:grid-cols-3">
           <Panel>
@@ -525,6 +600,16 @@ export function AdminPage() {
           <Panel>
             <SectionLabel>Languages</SectionLabel>
             <BarList data={top(global?.langs)} />
+          </Panel>
+        </div>
+
+        {/* rhythm */}
+        <div className="mt-3 grid gap-2.5 lg:grid-cols-2">
+          <Panel>
+            <Chart label="Visits · by weekday (UTC)" data={weekdayData} height={110} />
+          </Panel>
+          <Panel>
+            <Chart label="Visits · by hour of day (UTC)" data={hourData} height={110} />
           </Panel>
         </div>
 
@@ -557,7 +642,7 @@ export function AdminPage() {
           {global ? (
             <>
               <div className="mt-3 overflow-x-auto">
-                <table className="w-full min-w-[760px] border-collapse text-left">
+                <table className="w-full min-w-[880px] border-collapse text-left">
                   <thead>
                     <tr className="border-b border-white/[0.08] text-[9.5px] uppercase tracking-[0.14em] text-zinc-600">
                       <th className="py-2 pr-3 font-semibold">Time</th>
@@ -565,6 +650,8 @@ export function AdminPage() {
                       <th className="py-2 pr-3 font-semibold">Country</th>
                       <th className="py-2 pr-3 font-semibold">Browser</th>
                       <th className="py-2 pr-3 font-semibold">Device</th>
+                      <th className="py-2 pr-3 font-semibold">OS</th>
+                      <th className="py-2 pr-3 font-semibold">Model</th>
                       <th className="py-2 pr-3 font-semibold">Screen</th>
                       <th className="py-2 pr-3 font-semibold">Lang</th>
                       <th className="py-2 font-semibold">Referrer</th>
@@ -580,6 +667,8 @@ export function AdminPage() {
                         <td className="py-1.5 pr-3 text-[11px] text-zinc-400">{e.c ? countryName(e.c) : "—"}</td>
                         <td className="py-1.5 pr-3 text-[11px] text-zinc-400">{e.b ?? "—"}</td>
                         <td className="py-1.5 pr-3 text-[11px] text-zinc-400">{e.d ?? "—"}</td>
+                        <td className="py-1.5 pr-3 text-[11px] text-zinc-400">{e.o ?? "—"}</td>
+                        <td className="py-1.5 pr-3 text-[11px] text-zinc-500">{e.m ?? "—"}</td>
                         <td className="py-1.5 pr-3 text-[11px] tabular-nums text-zinc-500">{e.s ?? "—"}</td>
                         <td className="py-1.5 pr-3 text-[11px] text-zinc-500">{e.l ?? "—"}</td>
                         <td className="py-1.5 text-[11px] text-zinc-500">{e.r ?? "—"}</td>
@@ -587,7 +676,7 @@ export function AdminPage() {
                     ))}
                     {recentRows.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="py-3 text-[11.5px] text-zinc-600">
+                        <td colSpan={10} className="py-3 text-[11.5px] text-zinc-600">
                           nothing matches.
                         </td>
                       </tr>

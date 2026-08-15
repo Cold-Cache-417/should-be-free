@@ -312,6 +312,7 @@ export function Stopwatch() {
             checkoutNote="Your timer keeps running while you decide. Enter payment details to stop the meter."
             returnLabel="Back to the timer"
             dialogLabel="Pause your timer"
+            product="stopwatch"
             onClose={closePaywall}
             onUnlock={unlockPause}
           />
