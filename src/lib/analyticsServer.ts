@@ -17,6 +17,10 @@ export interface RecentEntry {
   b?: string;
   /** device class */
   d?: string;
+  /** screen size, e.g. "1920x1080" */
+  s?: string;
+  /** primary language, e.g. "en-us" */
+  l?: string;
 }
 
 /** Shape returned by GET /api/analytics. */
@@ -31,6 +35,8 @@ export interface GlobalAnalytics {
   browsers: Record<string, number>;
   devices: Record<string, number>;
   refs: Record<string, number>;
+  screens: Record<string, number>;
+  langs: Record<string, number>;
   recent: RecentEntry[];
 }
 

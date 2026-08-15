@@ -135,6 +135,20 @@ describe("POST /api/analytics", () => {
     expect(fake.store.get("sbf:firstSeen")).toMatch(/^\d+$/);
   });
 
+  it("counts screen size and language, sanitized", async () => {
+    await post(JSON.stringify({ type: "visit", screen: "1920x1080", lang: "EN-US" }));
+    await post(JSON.stringify({ type: "visit", screen: "bogus", lang: "x; drop table" }));
+    expect(fake.store.get("sbf:screens")).toEqual(["1920x1080", "1"]);
+    expect(fake.store.get("sbf:langs")).toEqual(["en-us", "1"]);
+    const recent = fake.store.get("sbf:recent") as string[];
+    const good = JSON.parse(recent[1]) as Record<string, unknown>; // newest-first: [bogus, good]
+    const bogus = JSON.parse(recent[0]) as Record<string, unknown>;
+    expect(good.s).toBe("1920x1080");
+    expect(good.l).toBe("en-us");
+    expect(bogus.s).toBeUndefined();
+    expect(bogus.l).toBeUndefined();
+  });
+
   it("buckets the visit into a day and hour counter", async () => {
     await post(JSON.stringify({ type: "visit" }));
     const dk = new Date().toISOString().slice(0, 10);
@@ -198,6 +212,8 @@ describe("GET /api/analytics", () => {
       countries: Record<string, number>;
       browsers: Record<string, number>;
       devices: Record<string, number>;
+      screens: Record<string, number>;
+      langs: Record<string, number>;
       recent: { t: number; a?: string }[];
       firstSeen: number | null;
     };

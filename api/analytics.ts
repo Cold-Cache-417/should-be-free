@@ -34,6 +34,8 @@ const KEY = {
   browsers: "sbf:browsers",
   devices: "sbf:devices",
   refs: "sbf:refs",
+  screens: "sbf:screens",
+  langs: "sbf:langs",
   recent: "sbf:recent",
   firstSeen: "sbf:firstSeen",
 } as const;
@@ -69,15 +71,24 @@ function json(data: unknown, status: number): Response {
 export async function POST(req: Request): Promise<Response> {
   if (!REST_URL || !REST_TOKEN) return json({ ok: false, reason: "not configured" }, 503);
 
-  let body: { type?: unknown; app?: unknown } = {};
+  let body: { type?: unknown; app?: unknown; screen?: unknown; lang?: unknown } = {};
   try {
-    body = JSON.parse(await req.text()) as { type?: unknown; app?: unknown };
+    body = JSON.parse(await req.text()) as {
+      type?: unknown;
+      app?: unknown;
+      screen?: unknown;
+      lang?: unknown;
+    };
   } catch {
     /* empty body — counts as a visit */
   }
 
   const type = body.type === "app" ? "app" : "visit";
   const app = typeof body.app === "string" ? body.app.slice(0, 32) : undefined;
+  const screen =
+    typeof body.screen === "string" && /^\d{1,5}x\d{1,5}$/.test(body.screen) ? body.screen : undefined;
+  const lang =
+    typeof body.lang === "string" && /^[a-z-]{2,20}$/i.test(body.lang) ? body.lang.slice(0, 20).toLowerCase() : undefined;
   const now = Date.now();
 
   const ua = req.headers.get("user-agent") ?? "";
@@ -91,6 +102,8 @@ export async function POST(req: Request): Promise<Response> {
   if (type === "app" && app) entry.a = app;
   if (country) entry.c = country;
   if (externalRef) entry.r = externalRef;
+  if (screen) entry.s = screen;
+  if (lang) entry.l = lang;
 
   try {
     const tasks: Promise<unknown>[] = [
@@ -108,6 +121,8 @@ export async function POST(req: Request): Promise<Response> {
     if (type === "app" && app) tasks.push(run("hincrby", KEY.apps, app, 1));
     if (country) tasks.push(run("hincrby", KEY.countries, country, 1));
     if (externalRef) tasks.push(run("hincrby", KEY.refs, externalRef, 1));
+    if (screen) tasks.push(run("hincrby", KEY.screens, screen, 1));
+    if (lang) tasks.push(run("hincrby", KEY.langs, lang, 1));
     await Promise.all(tasks);
   } catch (e) {
     return json({ ok: false, reason: e instanceof Error ? e.message : "upstash error" }, 500);
@@ -120,19 +135,33 @@ export async function GET(): Promise<Response> {
   if (!REST_URL || !REST_TOKEN) return json({ ok: false, reason: "not configured" }, 503);
 
   try {
-    const [totalRaw, firstRaw, appsFlat, countriesFlat, browsersFlat, devicesFlat, refsFlat, days, hours, recentRaw] =
-      await Promise.all([
-        run<string | null>("get", KEY.total),
-        run<string | null>("get", KEY.firstSeen),
-        run<string[] | null>("hgetall", KEY.apps),
-        run<string[] | null>("hgetall", KEY.countries),
-        run<string[] | null>("hgetall", KEY.browsers),
-        run<string[] | null>("hgetall", KEY.devices),
-        run<string[] | null>("hgetall", KEY.refs),
-        run<string[]>("smembers", KEY.days),
-        run<string[]>("smembers", KEY.hours),
-        run<string[]>("lrange", KEY.recent, 0, RECENT_CAP - 1),
-      ]);
+    const [
+      totalRaw,
+      firstRaw,
+      appsFlat,
+      countriesFlat,
+      browsersFlat,
+      devicesFlat,
+      refsFlat,
+      screensFlat,
+      langsFlat,
+      days,
+      hours,
+      recentRaw,
+    ] = await Promise.all([
+      run<string | null>("get", KEY.total),
+      run<string | null>("get", KEY.firstSeen),
+      run<string[] | null>("hgetall", KEY.apps),
+      run<string[] | null>("hgetall", KEY.countries),
+      run<string[] | null>("hgetall", KEY.browsers),
+      run<string[] | null>("hgetall", KEY.devices),
+      run<string[] | null>("hgetall", KEY.refs),
+      run<string[] | null>("hgetall", KEY.screens),
+      run<string[] | null>("hgetall", KEY.langs),
+      run<string[]>("smembers", KEY.days),
+      run<string[]>("smembers", KEY.hours),
+      run<string[]>("lrange", KEY.recent, 0, RECENT_CAP - 1),
+    ]);
 
     const dayCounts = await Promise.all(
       days
@@ -172,6 +201,8 @@ export async function GET(): Promise<Response> {
       browsers: toMap(browsersFlat),
       devices: toMap(devicesFlat),
       refs: toMap(refsFlat),
+      screens: toMap(screensFlat),
+      langs: toMap(langsFlat),
       recent,
     };
 

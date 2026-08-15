@@ -8,7 +8,11 @@ import {
   withVisit,
 } from "./analytics";
 
-const NOW = new Date(2026, 7, 11, 14, 30).getTime(); // 2026-08-11 14:30
+const NOW = (() => {
+  const d = new Date();
+  d.setHours(14, 30, 0, 0); // today at 14:30 — keeps the same-day label stable
+  return d.getTime();
+})();
 
 describe("withVisit", () => {
   it("increments total and prepends to the seen list", () => {

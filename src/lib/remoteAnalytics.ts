@@ -14,7 +14,16 @@ export type { GlobalAnalytics };
 const API = "/api/analytics";
 
 export function reportAnalytics(type: "visit" | "app", app?: string): void {
-  const payload = JSON.stringify(app ? { type, app } : { type });
+  const screen =
+    typeof window !== "undefined" && window.screen ? `${window.screen.width}x${window.screen.height}` : undefined;
+  const lang =
+    typeof navigator !== "undefined" && navigator.language ? navigator.language.slice(0, 20).toLowerCase() : undefined;
+  const payload = JSON.stringify({
+    type,
+    ...(app ? { app } : {}),
+    ...(screen ? { screen } : {}),
+    ...(lang ? { lang } : {}),
+  });
   try {
     if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
       navigator.sendBeacon(API, new Blob([payload], { type: "application/json" }));
